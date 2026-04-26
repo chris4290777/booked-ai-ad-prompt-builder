@@ -1,0 +1,350 @@
+:root {
+  color-scheme: dark;
+  --bg: #071019;
+  --panel: #0d1724;
+  --panel-strong: #111f31;
+  --line: #24364c;
+  --text: #f4f8fb;
+  --muted: #9db0c3;
+  --blue: #1e9bff;
+  --cyan: #4fe7ff;
+  --green: #52d6a3;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    linear-gradient(135deg, rgba(30, 155, 255, 0.16), transparent 32%),
+    radial-gradient(circle at 85% 12%, rgba(82, 214, 163, 0.14), transparent 25%),
+    var(--bg);
+  color: var(--text);
+}
+
+button,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.app-shell {
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(320px, 440px) minmax(0, 1fr);
+  gap: 20px;
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+.builder-panel,
+.output-panel {
+  border: 1px solid var(--line);
+  background: rgba(13, 23, 36, 0.92);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+}
+
+.builder-panel {
+  border-radius: 8px;
+  padding: 22px;
+  position: sticky;
+  top: 24px;
+  height: calc(100vh - 48px);
+  overflow: auto;
+}
+
+.brand-block {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 1px solid rgba(79, 231, 255, 0.55);
+  border-radius: 8px;
+  background: linear-gradient(145deg, #0c2540, #071019);
+  color: var(--cyan);
+  font-weight: 800;
+  box-shadow: 0 0 24px rgba(30, 155, 255, 0.32);
+}
+
+.brand-block p,
+.output-header p,
+.product-summary span,
+.spec-row span,
+.field span {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+h1,
+h2 {
+  margin: 2px 0 0;
+  letter-spacing: 0;
+  line-height: 1.1;
+}
+
+h1 {
+  font-size: 1.6rem;
+}
+
+h2 {
+  font-size: clamp(1.55rem, 2vw, 2.25rem);
+}
+
+.form-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.field {
+  display: grid;
+  gap: 7px;
+}
+
+select {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-strong);
+  color: var(--text);
+  padding: 0 12px;
+  outline: none;
+}
+
+select:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px rgba(79, 231, 255, 0.12);
+}
+
+.spec-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.spec-row div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(17, 31, 49, 0.72);
+  padding: 11px 12px;
+}
+
+.spec-row strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.98rem;
+}
+
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 18px 0;
+}
+
+.segmented button,
+.output-actions button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-strong);
+  color: var(--text);
+}
+
+.segmented button {
+  min-height: 42px;
+}
+
+.segmented button.active {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  background: rgba(30, 155, 255, 0.15);
+}
+
+.primary-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 48px;
+  border: 0;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--blue), var(--cyan));
+  color: #06111c;
+  font-weight: 800;
+}
+
+.product-summary {
+  margin-top: 20px;
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+}
+
+.product-summary strong {
+  display: block;
+  margin-top: 6px;
+}
+
+.product-summary p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.logo-asset {
+  margin-top: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(17, 31, 49, 0.72);
+  padding: 14px;
+}
+
+.logo-asset img {
+  display: block;
+  width: 100%;
+  height: auto;
+  padding: 10px;
+  border-radius: 6px;
+  background:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.08) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(255, 255, 255, 0.08) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(255, 255, 255, 0.08) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(255, 255, 255, 0.08) 75%),
+    #0a1320;
+  background-position:
+    0 0,
+    0 8px,
+    8px -8px,
+    -8px 0;
+  background-size: 16px 16px;
+}
+
+.logo-asset p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+  font-size: 0.9rem;
+}
+
+.output-panel {
+  min-height: calc(100vh - 48px);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.output-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 26px 28px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(17, 31, 49, 0.72);
+}
+
+.output-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.output-actions button {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+}
+
+.output-actions button:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.prompt-card {
+  display: grid;
+  gap: 1px;
+  background: var(--line);
+}
+
+.prompt-card article {
+  background: rgba(13, 23, 36, 0.98);
+  padding: 22px 28px;
+}
+
+.prompt-card h3 {
+  margin: 0 0 9px;
+  color: var(--cyan);
+  font-size: 0.92rem;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.prompt-card p {
+  margin: 0;
+  color: #d9e6f2;
+  line-height: 1.65;
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    padding: 12px;
+  }
+
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .builder-panel {
+    position: static;
+    height: auto;
+  }
+
+  .output-panel {
+    min-height: auto;
+  }
+
+  .output-header {
+    align-items: flex-start;
+    padding: 20px;
+  }
+
+  .prompt-card article {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 520px) {
+  .spec-row,
+  .segmented {
+    grid-template-columns: 1fr;
+  }
+
+  .output-header {
+    flex-direction: column;
+  }
+}
