@@ -24,6 +24,7 @@ const initialState: BuilderState = {
   cta: "Auto",
   expression: "Confident",
   imageSource: "Generate new image",
+  socialPlatform: "Instagram",
 };
 
 function Field({
@@ -61,6 +62,19 @@ function App() {
     () => products.find((product) => product.id === state.productId) ?? products[0],
     [state.productId],
   );
+
+  const visibleAssetReferences = useMemo(() => {
+    const references = selectedProduct.assetReferences ?? [];
+    if (selectedProduct.id !== "nfc_social_station") {
+      return references;
+    }
+
+    if (state.socialPlatform === "Both") {
+      return references;
+    }
+
+    return references.filter((reference) => reference.toLowerCase().includes(state.socialPlatform.toLowerCase()));
+  }, [selectedProduct, state.socialPlatform]);
 
   function update<K extends keyof BuilderState>(key: K, value: BuilderState[K]) {
     setState((current) => ({ ...current, [key]: value }));
@@ -158,6 +172,18 @@ function App() {
                 <option key={expression}>{expression}</option>
               ))}
             </Field>
+
+            {state.productId === "nfc_social_station" && (
+              <Field
+                label="Social platform"
+                value={state.socialPlatform}
+                onChange={(value) => update("socialPlatform", value as BuilderState["socialPlatform"])}
+              >
+                <option>Instagram</option>
+                <option>Facebook</option>
+                <option>Both</option>
+              </Field>
+            )}
           </div>
 
           <div className="segmented" aria-label="Image source">
@@ -188,7 +214,7 @@ function App() {
             <span>Required assets</span>
             <img src="/brand/booked-ai-logo-transparent-white.png" alt="Booked AI Systems transparent logo" />
             <p>Hosted logo included in every copied prompt.</p>
-            {selectedProduct.assetReferences?.map((asset) => {
+            {visibleAssetReferences.map((asset) => {
               const url = assetUrl(asset);
               return (
                 <div className="asset-reference" key={asset}>

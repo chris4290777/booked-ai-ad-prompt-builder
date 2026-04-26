@@ -21,6 +21,7 @@ export type BuilderState = {
   cta: string;
   expression: string;
   imageSource: "Generate new image" | "Upload own image";
+  socialPlatform: "Instagram" | "Facebook" | "Both";
 };
 
 export type PlatformFormat = {

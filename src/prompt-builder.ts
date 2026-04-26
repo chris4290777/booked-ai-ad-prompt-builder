@@ -43,6 +43,18 @@ function buildRequiredAssets(productAssetReferences: string[] = []) {
   return `Use every required asset listed here. Do not omit a required asset. 1. Brand logo: https://booked-ai-ad-prompt-builder.vercel.app/brand/booked-ai-logo-transparent-white.png. Use this exact transparent PNG as the Booked AI Systems logo; do not generate a fake logo or substitute text. 2. Product references, when listed: use them as visual references for the physical product/object in the scene.${productAssets} If an asset cannot be placed exactly, leave clean space for that asset instead of inventing a replacement. The final ad should include both the brand logo and any selected product reference asset in a balanced layout.`;
 }
 
+function getActiveAssetReferences(state: BuilderState, productAssetReferences: string[] = []) {
+  if (state.productId !== "nfc_social_station") {
+    return productAssetReferences;
+  }
+
+  if (state.socialPlatform === "Both") {
+    return productAssetReferences;
+  }
+
+  return productAssetReferences.filter((reference) => reference.toLowerCase().includes(state.socialPlatform.toLowerCase()));
+}
+
 function pickByText<T>(items: T[], seed: string) {
   const total = seed.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
   return items[total % items.length];
@@ -61,7 +73,16 @@ export function buildPrompt(state: BuilderState) {
   const pain = sentenceList(product.painPoints, 2);
   const solution = sentenceList(product.solutionLines, 2);
   const visualStyle = styleDirections[state.visualStyle] ?? styleDirections["Dark blue tech glow"];
-  const requiredAssets = buildRequiredAssets(product.assetReferences);
+  const activeAssetReferences = getActiveAssetReferences(state, product.assetReferences);
+  const requiredAssets = buildRequiredAssets(activeAssetReferences);
+  const socialPlatformDirection =
+    state.productId === "nfc_social_station"
+      ? ` Selected social platform for the follow station: ${state.socialPlatform}. ${
+          state.socialPlatform === "Both"
+            ? "Show a multi-platform social follow setup using both Facebook and Instagram reference cards, or a clearly intentional two-card display."
+            : `Use the ${state.socialPlatform} follow card reference only. Do not show the other platform's card.`
+        }`
+      : "";
 
   const sections = [
     {
@@ -86,7 +107,7 @@ export function buildPrompt(state: BuilderState) {
     },
     {
       heading: "Image Prompt",
-      body: `${product.imagePromptLogic} Industry context: ${state.industry}. Facial expression guidance: ${expressionGuidance[state.expression]}. Image source mode: ${state.imageSource}.`,
+      body: `${product.imagePromptLogic}${socialPlatformDirection} Industry context: ${state.industry}. Facial expression guidance: ${expressionGuidance[state.expression]}. Image source mode: ${state.imageSource}.`,
     },
     {
       heading: "Visual Direction",
