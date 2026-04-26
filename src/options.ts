@@ -359,9 +359,14 @@ export const products: Product[] = [
     ],
     featureBubbles: ["Tap To Follow", "QR + NFC", "All Social Links", "No Searching", "Local Followers", "Front Desk Ready", "Simple Customer Flow", "Grow Audience", "Social Connection", "No App Needed"],
     ctas: ["Get Your Social Follow Station", "Ask About Social Tap Tools", "Grow Your Local Audience", "See How Social Tap Works", "Book Your Discovery Call"],
-    visualDirection: "Customer at a cafe, salon, front desk, studio, clinic, or retail counter tapping a phone near a social follow stand.",
+    visualDirection:
+      "Customer at a cafe, salon, front desk, studio, clinic, or retail counter tapping a phone near a physical social media follow card. The follow card should look like the provided Facebook or Instagram NFC/QR reference cards: a small rounded rectangular countertop card with platform branding at the top, tap-phone NFC instruction, and QR code area. Use the reference card as the source for the physical object style, not a generic sign.",
     imagePromptLogic:
-      "Realistic vertical image of a customer tapping a smartphone near a clean social media follow station at a local business counter. Modern and friendly. Apply selected expression naturally if a person is visible. Leave space for ad text.",
+      "Realistic vertical image of a customer tapping a smartphone near a clean social media follow card at a local business counter. Use one of the supplied reference assets as the exact style reference for the card: Facebook follow card or Instagram follow card. The card should be visible as a physical NFC/QR countertop card, with realistic thickness, rounded corners, platform color, NFC/tap-phone area, and QR code zone. Do not turn it into a poster, phone screen, tablet, paper flyer, or floating UI graphic. Modern and friendly. Apply selected expression naturally if a person is visible. Leave space for ad text.",
+    assetReferences: [
+      "Facebook follow card reference: https://booked-ai-ad-prompt-builder.vercel.app/brand/social-follow/facebook-follow-card.png",
+      "Instagram follow card reference: https://booked-ai-ad-prompt-builder.vercel.app/brand/social-follow/instagram-follow-card.png",
+    ],
   },
   {
     id: "guest_wifi",

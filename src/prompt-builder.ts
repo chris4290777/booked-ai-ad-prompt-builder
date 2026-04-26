@@ -75,6 +75,14 @@ export function buildPrompt(state: BuilderState) {
       heading: "Logo Treatment",
       body: logoDirection,
     },
+    ...(product.assetReferences?.length
+      ? [
+          {
+            heading: "Product Asset References",
+            body: `Use these hosted reference images for this product's physical object style: ${product.assetReferences.join(" ")} Treat them as visual references for the object in the scene, not as text to recreate loosely.`,
+          },
+        ]
+      : []),
     {
       heading: "Image Prompt",
       body: `${product.imagePromptLogic} Industry context: ${state.industry}. Facial expression guidance: ${expressionGuidance[state.expression]}. Image source mode: ${state.imageSource}.`,

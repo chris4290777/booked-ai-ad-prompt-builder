@@ -9,6 +9,7 @@ export type Product = {
   ctas: string[];
   visualDirection: string;
   imagePromptLogic: string;
+  assetReferences?: string[];
 };
 
 export type BuilderState = {
