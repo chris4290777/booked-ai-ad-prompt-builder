@@ -77,6 +77,10 @@ function App() {
     window.setTimeout(() => setCopied(false), 1600);
   }
 
+  function assetUrl(assetReference: string) {
+    return assetReference.match(/https?:\/\/\S+/)?.[0] ?? "";
+  }
+
   return (
     <main className="app-shell">
       <section className="workspace">
@@ -181,8 +185,18 @@ function App() {
           </div>
 
           <div className="logo-asset">
+            <span>Required assets</span>
             <img src="/brand/booked-ai-logo-transparent-white.png" alt="Booked AI Systems transparent logo" />
-            <p>Attach this PNG with the copied prompt when generating the final ad.</p>
+            <p>Hosted logo included in every copied prompt.</p>
+            {selectedProduct.assetReferences?.map((asset) => {
+              const url = assetUrl(asset);
+              return (
+                <div className="asset-reference" key={asset}>
+                  <img src={url} alt={asset.replace(/:.*/, "")} />
+                  <p>{asset.replace(/:.*/, "")}</p>
+                </div>
+              );
+            })}
           </div>
         </aside>
 

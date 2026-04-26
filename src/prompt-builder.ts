@@ -35,6 +35,14 @@ const toneDirections: Record<string, string> = {
 const logoDirection =
   "Brand logo requirement: use the exact Booked AI Systems transparent PNG logo from this public asset URL: https://booked-ai-ad-prompt-builder.vercel.app/brand/booked-ai-logo-transparent-white.png. The final ad must use that exact image asset only. Do not type, recreate, redraw, approximate, or invent the Booked AI Systems logo with generated text. If the image model cannot place the exact PNG asset from the URL, leave the logo area blank instead of creating a substitute. Place the logo as a small brand signature, not a hero element: target 8% to 12% of the ad width, positioned in clean negative space such as the top-left or top-right brand corner. It must not compete with the headline, people, CTA, product mockup, phone, card, or main offer. Keep the PNG transparent with no box, badge, plaque, panel, rounded rectangle, border, or background behind it. Add only a subtle drop shadow and soft edge glow that follows the transparent alpha shape of the logo, not a rectangular glow. Make the logo feel integrated into the ad by matching the glow, shadow, scale, and placement to the layout grid. Match the logo white to the ad's typography white. Recolor exactly one logo text line, either \"Booked\" or \"AI Systems\", to the ad accent color. Keep the other text line white. Do not recolor the whole logo. Do not add any tagline, slogan, extra brand text, footer brand lockup, or duplicate brand name anywhere else. The logo must not cover, touch, or overlap any person's face, body, hands, phone, business card, or important object.";
 
+function buildRequiredAssets(productAssetReferences: string[] = []) {
+  const productAssets = productAssetReferences.length
+    ? ` Product-specific required asset references: ${productAssetReferences.join(" ")}`
+    : "";
+
+  return `Use every required asset listed here. Do not omit a required asset. 1. Brand logo: https://booked-ai-ad-prompt-builder.vercel.app/brand/booked-ai-logo-transparent-white.png. Use this exact transparent PNG as the Booked AI Systems logo; do not generate a fake logo or substitute text. 2. Product references, when listed: use them as visual references for the physical product/object in the scene.${productAssets} If an asset cannot be placed exactly, leave clean space for that asset instead of inventing a replacement. The final ad should include both the brand logo and any selected product reference asset in a balanced layout.`;
+}
+
 function pickByText<T>(items: T[], seed: string) {
   const total = seed.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
   return items[total % items.length];
@@ -53,6 +61,7 @@ export function buildPrompt(state: BuilderState) {
   const pain = sentenceList(product.painPoints, 2);
   const solution = sentenceList(product.solutionLines, 2);
   const visualStyle = styleDirections[state.visualStyle] ?? styleDirections["Dark blue tech glow"];
+  const requiredAssets = buildRequiredAssets(product.assetReferences);
 
   const sections = [
     {
@@ -72,24 +81,16 @@ export function buildPrompt(state: BuilderState) {
       body: cta,
     },
     {
-      heading: "Logo Treatment",
-      body: logoDirection,
+      heading: "Required Assets",
+      body: requiredAssets,
     },
-    ...(product.assetReferences?.length
-      ? [
-          {
-            heading: "Product Asset References",
-            body: `Use these hosted reference images for this product's physical object style: ${product.assetReferences.join(" ")} Treat them as visual references for the object in the scene, not as text to recreate loosely.`,
-          },
-        ]
-      : []),
     {
       heading: "Image Prompt",
       body: `${product.imagePromptLogic} Industry context: ${state.industry}. Facial expression guidance: ${expressionGuidance[state.expression]}. Image source mode: ${state.imageSource}.`,
     },
     {
       heading: "Visual Direction",
-      body: `${product.visualDirection} ${visualStyle} Match the visual hierarchy to the selected tone: ${state.tone}. ${toneDirections[state.tone]} ${logoDirection} Add clean overlay space for one headline, one short supporting line, feature bubbles reading "${features}", and the Booked AI Systems brand name. Use white text with strong contrast and cyan/electric-blue accents where appropriate.`,
+      body: `${product.visualDirection} ${visualStyle} Match the visual hierarchy to the selected tone: ${state.tone}. ${toneDirections[state.tone]} Follow the Required Assets section exactly. ${logoDirection} Add clean overlay space for one headline, one short supporting line, feature bubbles reading "${features}", and the Booked AI Systems brand name. Use white text with strong contrast and cyan/electric-blue accents where appropriate.`,
     },
     {
       heading: "Platform Specs",

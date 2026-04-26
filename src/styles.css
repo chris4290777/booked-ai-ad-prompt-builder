@@ -225,6 +225,16 @@ select:focus {
   padding: 14px;
 }
 
+.logo-asset span {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
 .logo-asset img {
   display: block;
   width: 100%;
@@ -250,6 +260,18 @@ select:focus {
   color: var(--muted);
   line-height: 1.45;
   font-size: 0.9rem;
+}
+
+.asset-reference {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.asset-reference img {
+  max-height: 150px;
+  object-fit: contain;
+  background: #ffffff;
 }
 
 .output-panel {
