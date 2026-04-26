@@ -17,6 +17,21 @@ const styleDirections: Record<string, string> = {
   "Industry-specific realistic photo": "Realistic local business environment matched to the selected industry, natural lighting, credible people and workspace details.",
 };
 
+const toneDirections: Record<string, string> = {
+  Professional:
+    "Use clear, credible, polished business language. Keep the message direct, practical, and easy to trust. Avoid slang, hype, and overly casual phrasing.",
+  Friendly:
+    "Use warm, approachable, conversational language. Make the ad feel helpful and human while still professional. Use simple phrasing that feels easy to act on.",
+  Playful:
+    "Use lighter, more energetic language with a small amount of personality. Keep it business-safe and readable. Avoid jokes that distract from the offer.",
+  Premium:
+    "Use refined, confident, high-end language. Keep the copy concise, calm, and polished. Avoid clutter, loud hype, bargain language, or overly busy wording.",
+  Bold:
+    "Use punchier, more assertive language with stronger headline energy. Keep it confident and direct without making exaggerated or guaranteed claims.",
+  "Urgent but not pushy":
+    "Use action-focused, time-aware language that encourages a next step without pressure. Avoid fear tactics, false scarcity, aggressive countdown language, or exaggerated urgency.",
+};
+
 const logoDirection =
   "Brand logo requirement: use the exact Booked AI Systems transparent PNG logo from this public asset URL: https://booked-ai-ad-prompt-builder.vercel.app/brand/booked-ai-logo-transparent-white.png. The final ad must use that exact image asset only. Do not type, recreate, redraw, approximate, or invent the Booked AI Systems logo with generated text. If the image model cannot place the exact PNG asset from the URL, leave the logo area blank instead of creating a substitute. Place the logo as a small brand signature, not a hero element: target 8% to 12% of the ad width, positioned in clean negative space such as the top-left or top-right brand corner. It must not compete with the headline, people, CTA, product mockup, phone, card, or main offer. Keep the PNG transparent with no box, badge, plaque, panel, rounded rectangle, border, or background behind it. Add only a subtle drop shadow and soft edge glow that follows the transparent alpha shape of the logo, not a rectangular glow. Make the logo feel integrated into the ad by matching the glow, shadow, scale, and placement to the layout grid. Match the logo white to the ad's typography white. Recolor exactly one logo text line, either \"Booked\" or \"AI Systems\", to the ad accent color. Keep the other text line white. Do not recolor the whole logo. Do not add any tagline, slogan, extra brand text, footer brand lockup, or duplicate brand name anywhere else. The logo must not cover, touch, or overlap any person's face, body, hands, phone, business card, or important object.";
 
@@ -46,7 +61,11 @@ export function buildPrompt(state: BuilderState) {
     },
     {
       heading: "Body Copy",
-      body: `${pain} ${solution} Keep the copy clear, direct, modern, and not hype-heavy for a ${state.industry}. Use approved hedged language such as "helps reduce", "supports faster response", "helps capture more opportunities", and "helps customers take action".`,
+      body: `${pain} ${solution} Write the ad copy in this selected tone: ${state.tone}. ${toneDirections[state.tone]} Keep the copy clear, direct, modern, and not hype-heavy for a ${state.industry}. Use approved hedged language such as "helps reduce", "supports faster response", "helps capture more opportunities", and "helps customers take action".`,
+    },
+    {
+      heading: "Tone Direction",
+      body: `Selected tone: ${state.tone}. ${toneDirections[state.tone]} Apply this tone to the headline, supporting copy, CTA framing, feature bubble wording, and overall visual text hierarchy while preserving the approved product claims.`,
     },
     {
       heading: "CTA",
@@ -62,7 +81,7 @@ export function buildPrompt(state: BuilderState) {
     },
     {
       heading: "Visual Direction",
-      body: `${product.visualDirection} ${visualStyle} ${logoDirection} Add clean overlay space for one headline, one short supporting line, feature bubbles reading "${features}", and the Booked AI Systems brand name. Use white text with strong contrast and cyan/electric-blue accents where appropriate.`,
+      body: `${product.visualDirection} ${visualStyle} Match the visual hierarchy to the selected tone: ${state.tone}. ${toneDirections[state.tone]} ${logoDirection} Add clean overlay space for one headline, one short supporting line, feature bubbles reading "${features}", and the Booked AI Systems brand name. Use white text with strong contrast and cyan/electric-blue accents where appropriate.`,
     },
     {
       heading: "Platform Specs",
