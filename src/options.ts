@@ -371,8 +371,8 @@ export const products: Product[] = [
   {
     id: "guest_wifi",
     name: "Guest Wi-Fi Connect Station",
-    positioning: "Physical NFC/QR Wi-Fi connect station. Guests connect to Wi-Fi quickly without typing a password or asking staff.",
-    hooks: ["Guest Wi-Fi Without The Password Hassle", "Let Customers Connect In Seconds", "Stop Repeating The Wi-Fi Password", "One Tap To Connect", "Make Guest Wi-Fi Easier"],
+    positioning: "Physical QR Wi-Fi connect station. Guests connect to Wi-Fi quickly without typing a password or asking staff.",
+    hooks: ["Guest Wi-Fi Without The Password Hassle", "Let Customers Connect In Seconds", "Stop Repeating The Wi-Fi Password", "Scan To Connect", "Make Guest Wi-Fi Easier"],
     painPoints: [
       "Customers constantly ask staff for the Wi-Fi password.",
       "Written passwords get outdated or hard to read.",
@@ -384,16 +384,16 @@ export const products: Product[] = [
       "The business is missing a simple branded touchpoint.",
     ],
     solutionLines: [
-      "Let guests connect with one tap or scan.",
+      "Let guests connect by scanning a QR code.",
       "Reduce repeated Wi-Fi questions at the counter.",
       "Make Wi-Fi access easier for customers and staff.",
       "Remove password typing friction.",
       "Create a cleaner guest experience.",
     ],
-    featureBubbles: ["One-Tap Wi-Fi", "No Password Typing", "QR + NFC", "Staff Time Saver", "Guest Friendly", "Branded Portal", "Optional Email Capture", "Easy Setup", "Fast Connection", "No App Needed"],
-    ctas: ["Get Your Wi-Fi Connect Station", "Ask About Guest Wi-Fi Tools", "Make Wi-Fi Easier", "See How Wi-Fi Tap Works", "Book Your Discovery Call"],
-    visualDirection: "Customer in a cafe, clinic, salon, hotel lobby, or waiting room connecting to Wi-Fi by tapping or scanning near a small sign.",
+    featureBubbles: ["Scan-To-Connect Wi-Fi", "No Password Typing", "QR Code Access", "Staff Time Saver", "Guest Friendly", "Branded Portal", "Optional Email Capture", "Easy Setup", "Fast Connection", "No App Needed"],
+    ctas: ["Get Your Wi-Fi Connect Station", "Ask About Guest Wi-Fi Tools", "Make Wi-Fi Easier", "See How QR Wi-Fi Works", "Book Your Discovery Call"],
+    visualDirection: "Customer in a cafe, clinic, salon, hotel lobby, or waiting room connecting to Wi-Fi by scanning a QR code on a small Wi-Fi connect sign.",
     imagePromptLogic:
-      "Realistic vertical image of a guest or customer using a smartphone near a small Wi-Fi connect sign in a cafe, clinic, salon, or waiting area. Clean, bright, professional. Apply selected expression naturally if a person is visible. Leave space for ad copy.",
+      "Realistic vertical image of a guest or customer scanning a QR code on a small Wi-Fi connect sign in a cafe, clinic, salon, or waiting area. The sign should communicate QR-based Wi-Fi access only. Do not show NFC icons, tap-to-connect language, NFC waves, or phone-tapping gestures. Clean, bright, professional. Apply selected expression naturally if a person is visible. Leave space for ad copy.",
   },
 ];
