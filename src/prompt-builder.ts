@@ -16,13 +16,16 @@ const styleDirections: Record<string, string> = {
   "Light modern business": "Bright modern business setting, clean natural light, white and soft-blue palette, professional and approachable.",
   "Industry-specific realistic photo": "Realistic local business environment matched to the selected industry, natural lighting, credible people and workspace details.",
   "Emerald trust": "Deep green and teal trust palette, clean white type, subtle mint highlights, grounded local-business feel, calm and credible.",
-  "Warm premium gold": "Premium black and warm gold palette, soft champagne highlights, refined high-end lighting, elegant and polished without looking flashy.",
+  "Warm premium gold": "Premium black and warm gold palette. Use warm gold and champagne for CTA buttons, feature bubble borders, icon accents, highlighted words, divider lines, logo accent line, and subtle glow effects. Avoid cyan, electric blue, neon blue, and blue tech glows for this theme.",
   "Clean white and cyan": "Bright white base with cyan accents, clean glassy interface elements, crisp shadows, modern SaaS-like clarity, fresh and minimal.",
   "Charcoal and lime": "Charcoal base with controlled lime accents, high contrast white text, energetic but still professional, useful for bold service ads.",
   "Medical teal": "Soft white and medical teal palette, clean trustworthy healthcare feel, gentle contrast, fresh lighting, calm and professional.",
   "Local service orange": "Dark charcoal with controlled orange highlights and warm off-white accents, practical local-service energy, confident and action-oriented.",
   "Soft slate and sky": "Light slate and sky-blue palette, airy spacing, soft professional contrast, approachable modern business feel.",
 };
+
+const colorThemeApplication =
+  "Apply the selected color theme consistently across the entire ad. The selected theme controls the background mood, CTA button color, feature bubble borders, icon accents, glow effects, panel/card borders, divider lines, highlighted words, UI mockup accents, and logo accent line. Do not fall back to cyan, electric blue, or dark blue tech styling unless that is part of the selected theme.";
 
 const toneDirections: Record<string, string> = {
   Professional:
@@ -118,7 +121,7 @@ export function buildPrompt(state: BuilderState) {
     },
     {
       heading: "Visual Direction",
-      body: `${product.visualDirection} ${visualStyle} Match the visual hierarchy to the selected tone: ${state.tone}. ${toneDirections[state.tone]} Follow the Required Assets section exactly. ${logoDirection} Add clean overlay space for one headline, one short supporting line, feature bubbles reading "${features}", and the Booked AI Systems brand name. Use white text with strong contrast and cyan/electric-blue accents where appropriate.`,
+      body: `${product.visualDirection} Selected color theme: ${state.visualStyle}. ${visualStyle} ${colorThemeApplication} Match the visual hierarchy to the selected tone: ${state.tone}. ${toneDirections[state.tone]} Follow the Required Assets section exactly. ${logoDirection} Add clean overlay space for one headline, one short supporting line, feature bubbles reading "${features}", and the Booked AI Systems brand name. Use high-contrast text that fits the selected color theme.`,
     },
     {
       heading: "Platform Specs",
