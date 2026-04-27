@@ -55,31 +55,52 @@ function ColorThemePicker({
   value: string;
   onChange: (value: string) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const selectedStyle = visualStyles.find((style) => style.name === value) ?? visualStyles[0];
+
+  function chooseTheme(name: string) {
+    onChange(name);
+    setOpen(false);
+  }
+
   return (
     <div className="theme-picker">
-      <div className="theme-picker-header">
-        <span>Color theme</span>
+      <span className="compact-label">Color theme</span>
+      <button
+        aria-expanded={open}
+        className={open ? "theme-trigger active" : "theme-trigger"}
+        onClick={() => setOpen((current) => !current)}
+        type="button"
+      >
+        <span className="swatches" aria-hidden="true">
+          {selectedStyle.swatches.map((color) => (
+            <span key={color} style={{ backgroundColor: color }} />
+          ))}
+        </span>
+        <strong>{selectedStyle.name}</strong>
         <Palette size={16} />
-      </div>
-      <div className="theme-grid">
-        {visualStyles.map((style) => (
-          <button
-            aria-pressed={value === style.name}
-            className={value === style.name ? "theme-option active" : "theme-option"}
-            key={style.name}
-            onClick={() => onChange(style.name)}
-            title={style.name}
-            type="button"
-          >
-            <span className="swatches" aria-hidden="true">
-              {style.swatches.map((color) => (
-                <span key={color} style={{ backgroundColor: color }} />
-              ))}
-            </span>
-            <strong>{style.name}</strong>
-          </button>
-        ))}
-      </div>
+      </button>
+      {open && (
+        <div className="theme-grid">
+          {visualStyles.map((style) => (
+            <button
+              aria-pressed={value === style.name}
+              className={value === style.name ? "theme-option active" : "theme-option"}
+              key={style.name}
+              onClick={() => chooseTheme(style.name)}
+              title={style.name}
+              type="button"
+            >
+              <span className="swatches" aria-hidden="true">
+                {style.swatches.map((color) => (
+                  <span key={color} style={{ backgroundColor: color }} />
+                ))}
+              </span>
+              <strong>{style.name}</strong>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
