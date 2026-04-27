@@ -15,6 +15,13 @@ const styleDirections: Record<string, string> = {
   "Premium black and blue": "Premium black base with electric blue accents, sharp lighting, refined contrast, sophisticated business-tech feel.",
   "Light modern business": "Bright modern business setting, clean natural light, white and soft-blue palette, professional and approachable.",
   "Industry-specific realistic photo": "Realistic local business environment matched to the selected industry, natural lighting, credible people and workspace details.",
+  "Emerald trust": "Deep green and teal trust palette, clean white type, subtle mint highlights, grounded local-business feel, calm and credible.",
+  "Warm premium gold": "Premium black and warm gold palette, soft champagne highlights, refined high-end lighting, elegant and polished without looking flashy.",
+  "Clean white and cyan": "Bright white base with cyan accents, clean glassy interface elements, crisp shadows, modern SaaS-like clarity, fresh and minimal.",
+  "Charcoal and lime": "Charcoal base with controlled lime accents, high contrast white text, energetic but still professional, useful for bold service ads.",
+  "Medical teal": "Soft white and medical teal palette, clean trustworthy healthcare feel, gentle contrast, fresh lighting, calm and professional.",
+  "Local service orange": "Dark charcoal with controlled orange highlights and warm off-white accents, practical local-service energy, confident and action-oriented.",
+  "Soft slate and sky": "Light slate and sky-blue palette, airy spacing, soft professional contrast, approachable modern business feel.",
 };
 
 const toneDirections: Record<string, string> = {

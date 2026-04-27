@@ -29,11 +29,18 @@ export const industries = [
 
 export const tones = ["Professional", "Friendly", "Playful", "Premium", "Bold", "Urgent but not pushy"];
 export const visualStyles = [
-  "Dark blue tech glow",
-  "Clean corporate blue",
-  "Premium black and blue",
-  "Light modern business",
-  "Industry-specific realistic photo",
+  { name: "Dark blue tech glow", swatches: ["#071019", "#0f2f5f", "#20c8ff"] },
+  { name: "Clean corporate blue", swatches: ["#f8fbff", "#0b3a78", "#1e9bff"] },
+  { name: "Premium black and blue", swatches: ["#05070b", "#111827", "#0ea5e9"] },
+  { name: "Light modern business", swatches: ["#ffffff", "#e8f4ff", "#2563eb"] },
+  { name: "Industry-specific realistic photo", swatches: ["#f4f4f0", "#64748b", "#0f766e"] },
+  { name: "Emerald trust", swatches: ["#061914", "#0f766e", "#5eead4"] },
+  { name: "Warm premium gold", swatches: ["#0b0b0a", "#b88746", "#fff7df"] },
+  { name: "Clean white and cyan", swatches: ["#ffffff", "#dff7ff", "#06b6d4"] },
+  { name: "Charcoal and lime", swatches: ["#111827", "#84cc16", "#f8fafc"] },
+  { name: "Medical teal", swatches: ["#f8fffd", "#0f766e", "#99f6e4"] },
+  { name: "Local service orange", swatches: ["#111827", "#f97316", "#fff7ed"] },
+  { name: "Soft slate and sky", swatches: ["#f8fafc", "#475569", "#38bdf8"] },
 ];
 export const ctas = [
   "Auto",

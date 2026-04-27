@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Check, Clipboard, RefreshCw, Sparkles } from "lucide-react";
+import { Check, Clipboard, Palette, RefreshCw, Sparkles } from "lucide-react";
 import "./styles.css";
 import {
   aspectRatios,
@@ -45,6 +45,42 @@ function Field({
         {children}
       </select>
     </label>
+  );
+}
+
+function ColorThemePicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="theme-picker">
+      <div className="theme-picker-header">
+        <span>Color theme</span>
+        <Palette size={16} />
+      </div>
+      <div className="theme-grid">
+        {visualStyles.map((style) => (
+          <button
+            aria-pressed={value === style.name}
+            className={value === style.name ? "theme-option active" : "theme-option"}
+            key={style.name}
+            onClick={() => onChange(style.name)}
+            title={style.name}
+            type="button"
+          >
+            <span className="swatches" aria-hidden="true">
+              {style.swatches.map((color) => (
+                <span key={color} style={{ backgroundColor: color }} />
+              ))}
+            </span>
+            <strong>{style.name}</strong>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -128,15 +164,7 @@ function App() {
               ))}
             </Field>
 
-            <Field
-              label="Visual style"
-              value={state.visualStyle}
-              onChange={(value) => update("visualStyle", value)}
-            >
-              {visualStyles.map((style) => (
-                <option key={style}>{style}</option>
-              ))}
-            </Field>
+            <ColorThemePicker value={state.visualStyle} onChange={(value) => update("visualStyle", value)} />
 
             <Field
               label="Platform + format"
