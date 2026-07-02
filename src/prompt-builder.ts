@@ -1,5 +1,19 @@
-import { formats, products } from "./options";
+import type { MappedPromptOverrides } from "./import-mapper";
+import { colorPresets, formats, products, type ColorPreset } from "./options";
 import type { BuilderState } from "./types";
+import { STYLE_BLOCKS, DEFAULT_STYLE, type AdStyle } from "./lib/style-blocks";
+
+const sceneVariants = [
+  "Subject faces camera directly, neutral mid-shot framing.",
+  "Subject at a slight three-quarter angle, relaxed natural posture.",
+  "Subject with confident upright posture, subtle sense of motion implied.",
+  "Subject in a candid natural pose, fully engaged in the activity.",
+];
+
+function pickSceneVariant(seed: string): string {
+  const total = seed.split("").reduce((sum, c) => sum + c.charCodeAt(0), 0);
+  return sceneVariants[total % sceneVariants.length];
+}
 
 const expressionGuidance: Record<string, string> = {
   Happy: "Warm, friendly, approachable, positive, natural smile. Avoid exaggerated grin.",
@@ -9,48 +23,125 @@ const expressionGuidance: Record<string, string> = {
   Angry: "Clearly frustrated or upset, but still realistic and safe for a professional business ad. Not threatening, violent, or exaggerated.",
 };
 
-const styleDirections: Record<string, string> = {
-  "Dark blue tech glow": "Dark navy background, electric blue highlights, glowing blue borders, white text, cyan accents, modern high-contrast tech style.",
-  "Clean corporate blue": "Clean white and deep-blue business palette, restrained cyan accents, polished corporate layout, spacious and highly readable.",
-  "Premium black and blue": "Premium black base with electric blue accents, sharp lighting, refined contrast, sophisticated business-tech feel.",
-  "Light modern business": "Bright modern business setting, clean natural light, white and soft-blue palette, professional and approachable.",
-  "Industry-specific realistic photo": "Realistic local business environment matched to the selected industry, natural lighting, credible people and workspace details.",
-  "Emerald trust": "Deep green and teal trust palette, clean white type, subtle mint highlights, grounded local-business feel, calm and credible.",
-  "Warm premium gold": "Premium black and warm gold palette. Use warm gold and champagne for CTA buttons, feature bubble borders, icon accents, highlighted words, divider lines, logo accent line, and subtle glow effects. Avoid cyan, electric blue, neon blue, and blue tech glows for this theme.",
-  "Clean white and cyan": "Bright white base with cyan accents, clean glassy interface elements, crisp shadows, modern SaaS-like clarity, fresh and minimal.",
-  "Charcoal and lime": "Charcoal base with controlled lime accents, high contrast white text, energetic but still professional, useful for bold service ads.",
-  "Medical teal": "Soft white and medical teal palette, clean trustworthy healthcare feel, gentle contrast, fresh lighting, calm and professional.",
-  "Local service orange": "Dark charcoal with controlled orange highlights and warm off-white accents, practical local-service energy, confident and action-oriented.",
-  "Soft slate and sky": "Light slate and sky-blue palette, airy spacing, soft professional contrast, approachable modern business feel.",
+// ── Color Direction Engine ─────────────────────────────────────────────────
+// Generates a three-layer color instruction from a ColorPreset (background,
+// accent application, text/contrast). Replaces the old flat styleDirections
+// name→string lookup so the prompt always reflects the exact hex values the
+// user selected rather than a manually maintained description.
+function buildColorDirection(preset: ColorPreset, autoAccentHex?: string): string {
+  if (preset.variant === "auto-dark" || preset.variant === "auto-light") {
+    const accent = autoAccentHex || "#20c8ff";
+    const isDark = preset.variant === "auto-dark";
+    const bgLayer = isDark
+      ? `Background layer: dark charcoal base (${preset.baseHex}), high-contrast professional environment.`
+      : `Background layer: bright studio-white base (${preset.baseHex}), clean and airy.`;
+    const textLayer = isDark
+      ? `Text layer: white or silver throughout; headlines in crisp white, secondary text in light silver/gray.`
+      : `Text layer: deep charcoal throughout; headlines in near-black (#111827), secondary text in slate gray.`;
+    return (
+      `Logo-sampled color theme. ${bgLayer} ` +
+      `Accent layer: ${accent} — apply this exact hex to CTA buttons, feature bubble borders, icon accents, glow effects, panel/card borders, divider lines, and highlighted headline words. ` +
+      `${textLayer} ` +
+      `Do not introduce any colors outside this palette. Do not fall back to generic cyan or electric blue unless ${accent} is in that range.`
+    );
+  }
+
+  const bgLayer =
+    preset.variant === "dark"
+      ? `Background layer: deep dark base using ${preset.baseHex}, high-contrast professional environment.`
+      : `Background layer: bright clean base using ${preset.baseHex}, airy and professional.`;
+
+  const accentLayer =
+    `Accent layer: ${preset.accentHex} — apply this exact hex to CTA buttons, feature bubble borders, icon accents, ` +
+    `glow effects, panel/card borders, divider lines, highlighted headline words, and logo accent line.`;
+
+  const textLayer =
+    preset.variant === "dark"
+      ? `Text layer: white or silver throughout; headlines in crisp white, secondary text in light silver/gray.`
+      : `Text layer: deep charcoal or dark navy throughout; headlines in near-black (#111827), secondary text in slate gray.`;
+
+  const noBleed =
+    `Do not introduce any colors outside this palette. ` +
+    `Do not fall back to generic cyan, electric blue, or dark navy unless they are part of this selected theme.`;
+
+  return `Selected palette: ${preset.name}. ${bgLayer} ${accentLayer} ${textLayer} ${noBleed}`;
+}
+
+interface ToneSpec {
+  copy: string;
+  visual: string;
+}
+
+const toneSpecs: Record<string, ToneSpec> = {
+  Professional: {
+    copy:   "Clear, credible, polished. Direct and practical. No slang or hype.",
+    visual: "Clean structured layout. Moderate headline weight. Bubbles evenly spaced. CTA button is solid, rectangular with rounded corners — no glow or urgency styling.",
+  },
+  Friendly: {
+    copy:   "Warm, approachable, conversational. Helpful and human. Simple phrasing.",
+    visual: "Softer layout with generous whitespace. Rounded bubble shapes. Headline in a friendly mid-weight. CTA button with soft rounded pill shape and a welcoming colour.",
+  },
+  Playful: {
+    copy:   "Light, energetic, personality-forward. Business-safe and readable.",
+    visual: "Dynamic layout with slight asymmetry. Bold rounded bubbles. Headline large and punchy. CTA button pill-shaped with bright accent fill and subtle shadow.",
+  },
+  Premium: {
+    copy:   "Refined, confident, high-end. Concise and calm. No clutter or hype.",
+    visual: "Minimalist layout — generous negative space, fewer elements. Headline in a thin/light weight typeface. Bubbles understated with hairline borders. CTA button sleek, narrow, with refined typography — no drop shadows.",
+  },
+  Bold: {
+    copy:   "Punchy, assertive, strong headline energy. Confident and direct.",
+    visual: "High-contrast layout. Headline very large and heavy-weight. Bubbles compact and tightly packed. CTA button wide and bold with strong fill colour and slight glow.",
+  },
+  "Urgent but not pushy": {
+    copy:   "Action-focused, time-aware. Encourages a next step without pressure. No fear tactics.",
+    visual: "Active layout with directional energy. Headline action-verb forward (e.g. 'Get', 'Start', 'Book'). CTA button prominent with a warm accent colour suggesting action, not alarm.",
+  },
 };
 
-const colorThemeApplication =
-  "Apply the selected color theme consistently across the entire ad. The selected theme controls the background mood, CTA button color, feature bubble borders, icon accents, glow effects, panel/card borders, divider lines, highlighted words, UI mockup accents, and logo accent line. Do not fall back to cyan, electric blue, or dark blue tech styling unless that is part of the selected theme.";
+// Builds the logo placement instruction for the Visual Direction section.
+// Simplified to a short set of hard rules so image models have fewer competing
+// constraints to balance — reducing the chance of logo recreation.
+// isLightBackground adds a drop-shadow guard so white logos stay readable on
+// white/cream backgrounds without recoloring the logo pixels.
+function calcLogoPct(logoW: number, logoH: number, formatAspectRatio: string): string {
+  const logoAR = logoW / Math.max(logoH, 1);
+  // Wider logos need more % width to stay legible at the same visual weight.
+  const base = Math.min(Math.max(Math.round(logoAR * 7), 10), 35);
+  // Horizontal formats have less vertical breathing room — reduce logo size.
+  const [fw, fh] = formatAspectRatio.split(":").map(Number);
+  const formatAR = (fw || 1) / (fh || 1);
+  const pct = formatAR > 1 ? Math.round(base * 0.7) : base;
+  return `${Math.max(pct, 8)}%`;
+}
 
-const toneDirections: Record<string, string> = {
-  Professional:
-    "Use clear, credible, polished business language. Keep the message direct, practical, and easy to trust. Avoid slang, hype, and overly casual phrasing.",
-  Friendly:
-    "Use warm, approachable, conversational language. Make the ad feel helpful and human while still professional. Use simple phrasing that feels easy to act on.",
-  Playful:
-    "Use lighter, more energetic language with a small amount of personality. Keep it business-safe and readable. Avoid jokes that distract from the offer.",
-  Premium:
-    "Use refined, confident, high-end language. Keep the copy concise, calm, and polished. Avoid clutter, loud hype, bargain language, or overly busy wording.",
-  Bold:
-    "Use punchier, more assertive language with stronger headline energy. Keep it confident and direct without making exaggerated or guaranteed claims.",
-  "Urgent but not pushy":
-    "Use action-focused, time-aware language that encourages a next step without pressure. Avoid fear tactics, false scarcity, aggressive countdown language, or exaggerated urgency.",
-};
+function buildLogoDirection(hasUserLogo: boolean, isLightBackground: boolean, logoPct: string): string {
+  if (!hasUserLogo) {
+    return "No brand logo provided. Do not generate, invent, or place any logo. Leave the brand corner clean and uncluttered.";
+  }
 
-const logoDirection =
-  "Brand logo requirement: use the exact Booked AI Systems transparent PNG logo from this public asset URL: https://booked-ai-ad-prompt-builder.vercel.app/brand/booked-ai-logo-transparent-white.png. The final ad must use that exact image asset only. Do not type, recreate, redraw, approximate, or invent the Booked AI Systems logo with generated text. If the image model cannot place the exact PNG asset from the URL, leave the logo area blank instead of creating a substitute. Place the logo as a small brand signature, not a hero element: target 8% to 12% of the ad width, positioned in clean negative space such as the top-left or top-right brand corner. It must not compete with the headline, people, CTA, product mockup, phone, card, or main offer. Keep the PNG transparent with no box, badge, plaque, panel, rounded rectangle, border, or background behind it. Add only a subtle drop shadow and soft edge glow that follows the transparent alpha shape of the logo, not a rectangular glow. Make the logo feel integrated into the ad by matching the glow, shadow, scale, and placement to the layout grid. Match the logo white to the ad's typography white. Recolor exactly one logo text line, either \"Booked\" or \"AI Systems\", to the ad accent color. Keep the other text line white. Do not recolor the whole logo. Do not add any tagline, slogan, extra brand text, footer brand lockup, or duplicate brand name anywhere else. The logo must not cover, touch, or overlap any person's face, body, hands, phone, business card, or important object.";
+  const lightGuard = isLightBackground
+    ? " The logo may contain white elements — place it exactly as attached against the light background without adding any backing, card, or container behind it."
+    : "";
 
-function buildRequiredAssets(productAssetReferences: string[] = []) {
+  return (
+    `Brand logo: place the exact attached transparent PNG in the top-left or top-right corner at ${logoPct} of ad width as a brand signature. ` +
+    "Do not redraw, redesign, recreate, recolor, or modify it in any way. No backing shape of any kind behind it. " +
+    "If it cannot be placed exactly as attached, leave the space blank." +
+    lightGuard
+  );
+}
+
+function buildRequiredAssets(productAssetReferences: string[] = [], hasUserLogo = false) {
   const productAssets = productAssetReferences.length
     ? ` Product-specific required asset references: ${productAssetReferences.join(" ")}`
     : "";
 
-  return `Use every required asset listed here. Do not omit a required asset. 1. Brand logo: https://booked-ai-ad-prompt-builder.vercel.app/brand/booked-ai-logo-transparent-white.png. Use this exact transparent PNG as the Booked AI Systems logo; do not generate a fake logo or substitute text. 2. Product references, when listed: use them as visual references for the physical product/object in the scene.${productAssets} If an asset cannot be placed exactly, leave clean space for that asset instead of inventing a replacement. The final ad should include both the brand logo and any selected product reference asset in a balanced layout.`;
+  const brandLogoAsset = hasUserLogo
+    ? "1. Brand logo: the transparent PNG image attached by the user to this conversation. Use this exact attached image as the brand logo; do not generate a fake logo or substitute text."
+    : "1. Brand logo: none provided. Do not generate or invent a logo. Leave the brand area clean.";
+
+  return `Use every required asset listed here. Do not omit a required asset. ${brandLogoAsset} 2. Product references, when listed: use them as visual references for the physical product/object in the scene.${productAssets} If an asset cannot be placed exactly, leave clean space for that asset instead of inventing a replacement. The final ad should include both the brand logo and any selected product reference asset in a balanced layout.`;
 }
 
 function getActiveAssetReferences(state: BuilderState, productAssetReferences: string[] = []) {
@@ -74,17 +165,62 @@ function sentenceList(items: string[], count: number) {
   return items.slice(0, count).join(" ");
 }
 
-export function buildPrompt(state: BuilderState) {
+export interface KBContext {
+  selectedOffer?: string | null;
+  benefits?: string[];
+}
+
+export interface AssetContext {
+  hasUserLogo?: boolean;
+  autoAccentHex?: string;
+  logoWidth?: number;
+  logoHeight?: number;
+}
+
+export function buildPrompt(
+  state: BuilderState,
+  kb?: KBContext,
+  overrides?: MappedPromptOverrides,
+  assets?: AssetContext,
+  variantSeed?: number,
+) {
+  const hasUserLogo = !!assets?.hasUserLogo;
   const product = products.find((item) => item.id === state.productId) ?? products[0];
   const format = formats.find((item) => item.id === state.platformFormatId) ?? formats[0];
-  const cta = state.cta === "Auto" ? pickByText(product.ctas, `${product.id}-${state.industry}`) : state.cta;
-  const hook = pickByText(product.hooks, `${state.productId}-${state.industry}-${state.tone}`);
-  const features = product.featureBubbles.slice(0, 6).join(" · ");
-  const pain = sentenceList(product.painPoints, 2);
-  const solution = sentenceList(product.solutionLines, 2);
-  const visualStyle = styleDirections[state.visualStyle] ?? styleDirections["Dark blue tech glow"];
+  const companyName = state.companyName?.trim() || "";
+  const locationArea = state.locationArea?.trim() || "";
+  const businessType = state.businessType?.trim() || "local business";
+  const offer = kb?.selectedOffer?.trim() || "";
+  const kbBenefits = kb?.benefits?.filter((b) => b.trim().length > 0) ?? [];
+  // ── CTA Resolution ────────────────────────────────────────────────────────
+  // Resolved strictly from the UI selection, which is fed by the business-type
+  // CSV (Primary CTA Options column). No product.ctas fallback, no "Auto"
+  // pivot, no AI Receptionist or legacy SaaS strings.
+  //
+  // 1. Database-Driven Context — the CSV business-type data owns valid options.
+  // 2. Intent Matching — action verbs must fit the local-business offer context
+  //    ("Book Now" for services, "Get a Free Quote" for contractors, etc.).
+  // 3. Independence — zero coupling to product.ctas arrays (those are dead
+  //    code). If a programmatic caller supplies overrides.cta that takes
+  //    precedence; otherwise state.cta from the UI is used verbatim.
+  //
+  // DO NOT add product-pitch fallbacks or re-introduce pickByText(product.ctas).
+  const cta = overrides?.cta || state.cta;
+  const hook = offer || "Special Offer";
+  const features = kbBenefits.length
+    ? kbBenefits.slice(0, 6).join(" · ")
+    : overrides?.benefits?.length
+      ? overrides.benefits.slice(0, 6).join(" · ")
+      : product.featureBubbles.slice(0, 6).join(" · ");
+  const palettePreset = colorPresets.find((p) => p.id === state.paletteId) ?? colorPresets[0];
+  const colorDirection = buildColorDirection(palettePreset, assets?.autoAccentHex);
   const activeAssetReferences = getActiveAssetReferences(state, product.assetReferences);
-  const requiredAssets = buildRequiredAssets(activeAssetReferences);
+  const requiredAssets = buildRequiredAssets(activeAssetReferences, hasUserLogo);
+  const isLightPalette = palettePreset.variant === "light" || palettePreset.variant === "auto-light";
+  const logoPct = (assets?.logoWidth && assets?.logoHeight)
+    ? calcLogoPct(assets.logoWidth, assets.logoHeight, format.aspectRatio)
+    : "12%";
+  const activeLogoDirection = buildLogoDirection(hasUserLogo, isLightPalette, logoPct);
   const socialPlatformDirection =
     state.productId === "nfc_social_station"
       ? ` Selected social platform for the follow station: ${state.socialPlatform}. ${
@@ -100,12 +236,8 @@ export function buildPrompt(state: BuilderState) {
       body: hook,
     },
     {
-      heading: "Body Copy",
-      body: `${pain} ${solution} Write the ad copy in this selected tone: ${state.tone}. ${toneDirections[state.tone]} Keep the copy clear, direct, modern, and not hype-heavy for a ${state.industry}. Use approved hedged language such as "helps reduce", "supports faster response", "helps capture more opportunities", and "helps customers take action".`,
-    },
-    {
       heading: "Tone Direction",
-      body: `Selected tone: ${state.tone}. ${toneDirections[state.tone]} Apply this tone to the headline, supporting copy, CTA framing, feature bubble wording, and overall visual text hierarchy while preserving the approved product claims.`,
+      body: `Selected tone: ${state.tone}. Copy direction: ${toneSpecs[state.tone]?.copy ?? ""} Apply this tone to the headline text, CTA wording, and feature bubble labels. No body copy or descriptive paragraphs are used in this ad format.`,
     },
     {
       heading: "CTA",
@@ -117,11 +249,24 @@ export function buildPrompt(state: BuilderState) {
     },
     {
       heading: "Image Prompt",
-      body: `${product.imagePromptLogic}${socialPlatformDirection} Industry context: ${state.industry}. Facial expression guidance: ${expressionGuidance[state.expression]}. Image source mode: ${state.imageSource}.`,
+      body: `Scene: a ${businessType} environment with one clear focal subject — a professional providing ${hook} services.${companyName ? ` Company: ${companyName}.` : ""}${locationArea ? ` Location: ${locationArea}.` : ""} Facial expression guidance: ${expressionGuidance[state.expression]}. Scene framing: ${pickSceneVariant(String(variantSeed ?? Math.random()))} If more than one person appears in the scene, each figure MUST be visually distinct — they are different real people, not twins or clones. Differentiate each person through hair style, hair length, hair colour, facial structure, jawline shape, nose shape, eye shape, brow shape, skin tone, age appearance, height, and body build. For example: one with short dark hair and a round face, the other with longer lighter hair and a sharper jawline. One noticeably taller or broader than the other. Small natural differences in skin tone are fine but extreme ethnic contrast is not required — focus the distinction on individual features and personal appearance, the way two real coworkers or strangers would naturally look different from each other. Never render two people who could be mistaken for the same person or siblings.${socialPlatformDirection}`,
     },
     {
       heading: "Visual Direction",
-      body: `${product.visualDirection} Selected color theme: ${state.visualStyle}. ${visualStyle} ${colorThemeApplication} Match the visual hierarchy to the selected tone: ${state.tone}. ${toneDirections[state.tone]} Follow the Required Assets section exactly. ${logoDirection} Add clean overlay space for one headline, one short supporting line, feature bubbles reading "${features}", and the Booked AI Systems brand name. Use high-contrast text that fits the selected color theme.`,
+      body: `${colorDirection} Tone: ${state.tone}. Visual treatment for this tone: ${toneSpecs[state.tone]?.visual ?? ""} Follow the Required Assets section exactly. ${activeLogoDirection} Render EXACTLY these 4 text elements on the graphic — no more, no less: (1) Bold headline: A catchy, high-converting marketing hook/headline tailored to the ${hook} offer (e.g., an attention-grabbing line matching the selected Tone, max 5-7 words). (2) ${locationArea ? `Small clean sub-headline or badge: "Serving ${locationArea}".` : `Omit the location element entirely — no location was provided.`} (3) Feature bubbles: ${features}. (4) CTA button or styled text block: "${cta}". STRICT RULE: do NOT render any body copy paragraph, descriptive sentence, supporting tagline, slogan, or wall of text beyond these 4 elements. Use high-contrast text that fits the selected color theme.`,
+    },
+    {
+      heading: "Visual Style",
+      body: (() => {
+        const styleKey = (state.animatedCharacterStyle ?? state.adStyle ?? DEFAULT_STYLE) as AdStyle;
+        const spec = STYLE_BLOCKS[styleKey] ?? STYLE_BLOCKS[DEFAULT_STYLE];
+        return (
+          `VISUAL STYLE: ${styleKey}\n` +
+          `PHOTOGRAPHY: ${spec.photography}\n` +
+          `TYPOGRAPHY: ${spec.typography}\n` +
+          `CHIPS: ${spec.chips}`
+        );
+      })(),
     },
     {
       heading: "Platform Specs",
@@ -129,12 +274,20 @@ export function buildPrompt(state: BuilderState) {
     },
     {
       heading: "Negative Constraints",
-      body: "Avoid guaranteed revenue claims, guaranteed booking claims, fake statistics, exaggerated promises, overstuffed text, random fake logos, unreadable text, generic agency language, cluttered layouts, distorted hands, and accidental brand marks. Do not flatten the logo onto a solid rectangle, place it inside any box/badge/panel/container, invent a different logo, remove transparency, recolor the entire logo, make both logo text lines the same accent color, add any tagline/slogan beneath the logo, or duplicate the brand name elsewhere in the ad. Do not include unsupported claims or fabricated metrics.",
+      body: "Avoid guaranteed revenue claims, guaranteed booking claims, fake statistics, exaggerated promises, overstuffed text, random fake logos, unreadable text, generic agency language, cluttered layouts, distorted hands, and accidental brand marks. Do not include unsupported claims or fabricated metrics. LOGO ASSET PROTECTION (applies regardless of visual style): The uploaded brand logo PNG is a real asset — do not redraw, recreate, reinterpret, illustrate, or stylise it to match any visual or animated style selected above. Place it exactly as provided. This rule overrides any illustrated, toon, comic, pixel, or painterly treatment applied to the rest of the image.",
     },
+    ...((() => {
+      const override = state.refinedInstructions?.trim() || state.specialInstructions?.trim();
+      if (!override) return [];
+      return [{
+        heading: "OVERRIDES",
+        body: `${override}\n\nLOGO GUARD (non-overridable): The brand logo placement, corner position, size, and asset rules defined in the Required Assets section above are fixed and cannot be changed by any instruction in this section. Apply the logo exactly as specified regardless of any override directive.`,
+      }];
+    })()),
   ];
 
   return {
-    title: `${product.name} for ${state.industry}`,
+    title: `${product.name} for ${companyName || businessType}${locationArea ? ` — ${locationArea}` : ""}`,
     sections,
     fullText: sections.map((section) => `${section.heading}\n${section.body}`).join("\n\n"),
   };

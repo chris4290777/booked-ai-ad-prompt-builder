@@ -28,41 +28,89 @@ export const industries = [
 ];
 
 export const tones = ["Professional", "Friendly", "Playful", "Premium", "Bold", "Urgent but not pushy"];
-export const visualStyles = [
-  { name: "Dark blue tech glow", swatches: ["#071019", "#0f2f5f", "#20c8ff"] },
-  { name: "Clean corporate blue", swatches: ["#f8fbff", "#0b3a78", "#1e9bff"] },
-  { name: "Premium black and blue", swatches: ["#05070b", "#111827", "#0ea5e9"] },
-  { name: "Light modern business", swatches: ["#ffffff", "#e8f4ff", "#2563eb"] },
-  { name: "Industry-specific realistic photo", swatches: ["#f4f4f0", "#64748b", "#0f766e"] },
-  { name: "Emerald trust", swatches: ["#061914", "#0f766e", "#5eead4"] },
-  { name: "Warm premium gold", swatches: ["#0b0b0a", "#b88746", "#fff7df"] },
-  { name: "Clean white and cyan", swatches: ["#ffffff", "#dff7ff", "#06b6d4"] },
-  { name: "Charcoal and lime", swatches: ["#111827", "#84cc16", "#f8fafc"] },
-  { name: "Medical teal", swatches: ["#f8fffd", "#0f766e", "#99f6e4"] },
-  { name: "Local service orange", swatches: ["#111827", "#f97316", "#fff7ed"] },
-  { name: "Soft slate and sky", swatches: ["#f8fafc", "#475569", "#38bdf8"] },
+export interface ColorPreset {
+  id: string;
+  name: string;
+  variant: "dark" | "light" | "auto-dark" | "auto-light";
+  baseHex: string;
+  accentHex: string;
+}
+
+export const colorPresets: ColorPreset[] = [
+  // ── Dark variants ──────────────────────────────────────────────────────────
+  { id: "dark-blue-tech",     name: "Dark Blue Tech Glow",      variant: "dark",  baseHex: "#071019", accentHex: "#20c8ff" },
+  { id: "premium-black-blue", name: "Premium Black & Blue",     variant: "dark",  baseHex: "#05070b", accentHex: "#0ea5e9" },
+  { id: "emerald-trust",      name: "Emerald Trust",            variant: "dark",  baseHex: "#061914", accentHex: "#5eead4" },
+  { id: "warm-gold",          name: "Warm Premium Gold",        variant: "dark",  baseHex: "#0b0b0a", accentHex: "#b88746" },
+  { id: "charcoal-lime",      name: "Charcoal & Lime",          variant: "dark",  baseHex: "#111827", accentHex: "#84cc16" },
+  { id: "service-orange",     name: "Local Service Orange",     variant: "dark",  baseHex: "#111827", accentHex: "#f97316" },
+  // ── Light variants ─────────────────────────────────────────────────────────
+  { id: "clean-corp-blue",    name: "Clean Corporate Blue",     variant: "light", baseHex: "#f8fbff", accentHex: "#1e9bff" },
+  { id: "light-modern-biz",   name: "Light Modern Business",    variant: "light", baseHex: "#ffffff", accentHex: "#2563eb" },
+  { id: "industry-photo",     name: "Industry Photo Realistic", variant: "light", baseHex: "#f4f4f0", accentHex: "#0f766e" },
+  { id: "white-cyan",         name: "Clean White & Cyan",       variant: "light", baseHex: "#ffffff", accentHex: "#06b6d4" },
+  { id: "medical-teal",       name: "Medical Teal",             variant: "light", baseHex: "#f8fffd", accentHex: "#0f766e" },
+  { id: "slate-sky",          name: "Soft Slate & Sky",         variant: "light", baseHex: "#f8fafc", accentHex: "#38bdf8" },
+  // ── Logo-sampled auto variants (accent derived from uploaded logo) ─────────
+  { id: "auto-dark",          name: "Dark Mode from Logo",      variant: "auto-dark",  baseHex: "#111827", accentHex: "" },
+  { id: "auto-light",         name: "Light Mode from Logo",     variant: "auto-light", baseHex: "#ffffff", accentHex: "" },
 ];
+/**
+ * CTA Engine — UI Option Pool
+ *
+ * These are the intent-based CTA options surfaced in the UI dropdown.
+ * The correct CTA for each business type is ultimately driven by the
+ * CSV "Primary CTA Options" column. This list is the selectable pool
+ * that surfaces those options to the user.
+ *
+ * Architecture principles — DO NOT violate:
+ *
+ * 1. Database-Driven Context: CTAs are chosen based on the selected
+ *    business type and offer, not a one-size-fits-all fallback. The
+ *    CSV is the source of truth for what is valid per business type.
+ *
+ * 2. Intent Matching: Every option must reflect a real local-business
+ *    action verb ("Book Now" for service providers, "Get a Free Quote"
+ *    for contractors). Generic SaaS verbs ("Start Capturing Leads",
+ *    "Book Your Discovery Call") are prohibited in this list.
+ *
+ * 3. Independence: This pool is fully decoupled from the legacy
+ *    AI Receptionist / SaaS product pipeline. prompt-builder.ts
+ *    resolves the CTA directly from the UI selection — it must never
+ *    fall back to any product.ctas array (those arrays are dead code).
+ *
+ * If a CTA reads like it belongs in a B2B SaaS funnel, it does not
+ * belong here. Keep every option appropriate for a local business ad.
+ */
 export const ctas = [
-  "Auto",
-  "Book Your Discovery Call Today",
-  "See How It Works",
-  "Ask Us About This System",
-  "Find Out How We Can Help",
-  "Start Capturing More Leads",
-  "Get More Booked Appointments",
+  "Book Now",
+  "Get a Free Quote",
+  "Call Us Today",
+  "Schedule a Consultation",
+  "Claim This Offer",
+  "Get in Touch",
+  "Request a Callback",
+  "Learn More",
 ];
 export const aspectRatios = ["1:1", "4:5", "9:16", "1.91:1", "3:4"];
 export const expressions = ["Happy", "Confident", "Focused", "Irritated", "Angry"];
 
 export const formats: PlatformFormat[] = [
-  { id: "facebook-feed-post", platform: "Facebook", name: "Feed Post", aspectRatio: "4:5", resolution: "1080x1350" },
-  { id: "facebook-feed-ad", platform: "Facebook", name: "Feed Ad", aspectRatio: "1:1", resolution: "1080x1080" },
-  { id: "facebook-stories-reels", platform: "Facebook", name: "Stories/Reels", aspectRatio: "9:16", resolution: "1080x1920" },
-  { id: "facebook-link-ad", platform: "Facebook", name: "Link Ad", aspectRatio: "1.91:1", resolution: "1200x628" },
-  { id: "instagram-standard-post", platform: "Instagram", name: "Standard Post", aspectRatio: "4:5", resolution: "1080x1350" },
-  { id: "instagram-grid-post", platform: "Instagram", name: "Grid Post", aspectRatio: "3:4", resolution: "1080x1440" },
-  { id: "instagram-feed-ad", platform: "Instagram", name: "Feed Ad", aspectRatio: "4:5", resolution: "1080x1350" },
-  { id: "instagram-stories-reels", platform: "Instagram", name: "Stories/Reels", aspectRatio: "9:16", resolution: "1080x1920" },
+  { id: "fb-portrait-feed",     platform: "Facebook",  name: "Portrait / Feed Ad",              aspectRatio: "4:5",    resolution: "1080×1350" },
+  { id: "fb-square-carousel",   platform: "Facebook",  name: "Square / Carousel",               aspectRatio: "1:1",    resolution: "1080×1080" },
+  { id: "fb-stories-reels",     platform: "Facebook",  name: "Stories & Reels",                 aspectRatio: "9:16",   resolution: "1080×1920" },
+  { id: "fb-landscape-link",    platform: "Facebook",  name: "Landscape / Link Preview",        aspectRatio: "1.91:1", resolution: "1200×628"  },
+  { id: "ig-feed-grid",         platform: "Instagram", name: "Feed / Grid-Friendly Portrait",   aspectRatio: "3:4",    resolution: "1080×1440" },
+  { id: "ig-feed-portrait-ads", platform: "Instagram", name: "Feed Portrait / Ads",             aspectRatio: "4:5",    resolution: "1080×1350" },
+  { id: "ig-stories-reels",     platform: "Instagram", name: "Stories / Reels",                 aspectRatio: "9:16",   resolution: "1080×1920" },
+  { id: "ig-square-post",       platform: "Instagram", name: "Square Post",                     aspectRatio: "1:1",    resolution: "1080×1080" },
+  { id: "li-single-link",       platform: "LinkedIn",  name: "Single Image / Link Ad",          aspectRatio: "1.91:1", resolution: "1200×628"  },
+  { id: "li-vertical-mobile",   platform: "LinkedIn",  name: "Vertical Image Ad / Mobile Only", aspectRatio: "4:5",    resolution: "1080×1350" },
+  { id: "th-standard-post",     platform: "Threads",   name: "Standard Post",                   aspectRatio: "4:5",    resolution: "1080×1350" },
+  { id: "th-full-vertical",     platform: "Threads",   name: "Full Vertical",                   aspectRatio: "9:16",   resolution: "1080×1920" },
+  { id: "th-native",            platform: "Threads",   name: "Native 3:4",                      aspectRatio: "3:4",    resolution: "1080×1440" },
+  { id: "x-instream",           platform: "X",         name: "In-Stream Image",                 aspectRatio: "16:9",   resolution: "1920×1080" },
+  { id: "x-square",             platform: "X",         name: "Square Image",                    aspectRatio: "1:1",    resolution: "1080×1080" },
 ];
 
 export const products: Product[] = [

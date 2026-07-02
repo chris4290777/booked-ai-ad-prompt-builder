@@ -16,17 +16,25 @@ export type BuilderState = {
   productId: string;
   industry: string;
   tone: string;
-  visualStyle: string;
+  paletteId: string;
   platformFormatId: string;
   cta: string;
   expression: string;
   imageSource: "Generate new image" | "Upload own image";
   socialPlatform: "Instagram" | "Facebook" | "Both";
+  websiteUrl?: string;
+  companyName?: string;
+  locationArea?: string;
+  businessType?: string;
+  adStyle?: string;
+  animatedCharacterStyle?: string;
+  specialInstructions?: string;
+  refinedInstructions?: string;
 };
 
 export type PlatformFormat = {
   id: string;
-  platform: "Facebook" | "Instagram";
+  platform: "Facebook" | "Instagram" | "LinkedIn" | "Threads" | "X";
   name: string;
   aspectRatio: string;
   resolution: string;
