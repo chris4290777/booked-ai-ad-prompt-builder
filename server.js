@@ -13,6 +13,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = Number(process.env.PORT) || 5001;
+const HOST = process.env.HOST || "127.0.0.1";
 
 const firecrawl = new FirecrawlApp({ apiKey: process.env.FIRECRAWL_API_KEY });
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -532,7 +533,32 @@ async function aiBenefitsForOffers({ offers, siteContent, ctx }) {
 
 // ─── Express app ──────────────────────────────────────────────────────────
 const app = express();
-app.use(cors());
+
+const localOriginPattern = /^http:\/\/(?:127\.0\.0\.1|localhost):\d+$/;
+const configuredOrigins = new Set(
+  (process.env.ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+);
+
+if (process.env.VERCEL_URL) {
+  configuredOrigins.add(`https://${process.env.VERCEL_URL}`);
+}
+
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+    if (configuredOrigins.has(origin) || localOriginPattern.test(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(null, false);
+  },
+}));
 app.use(express.json({ limit: "2mb" }));
 
 app.post("/api/build-kb", async (req, res) => {
@@ -768,6 +794,10 @@ app.post("/api/refine-instruction", async (req, res) => {
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
-app.listen(PORT, "127.0.0.1", () => {
-  console.log(`KB backend listening on http://127.0.0.1:${PORT}`);
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+  app.listen(PORT, HOST, () => {
+    console.log(`KB backend listening on http://${HOST}:${PORT}`);
+  });
+}
+
+export default app;
