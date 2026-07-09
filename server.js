@@ -192,6 +192,40 @@ const GENERIC_BENEFITS_FALLBACK = [
   "Service You Can Rely On",
 ];
 
+const KB_CACHE_TTL_MS = 10 * 60 * 1000;
+const kbCacheEnabled = process.env.NODE_ENV !== "production" && !process.env.VERCEL;
+const kbCache = new Map();
+
+function kbCacheKey({ websiteUrl, businessType, companyName, location, tone }) {
+  return JSON.stringify({
+    websiteUrl: String(websiteUrl || "").trim(),
+    businessType: String(businessType || "").trim(),
+    companyName: String(companyName || "").trim(),
+    location: String(location || "").trim(),
+    tone: String(tone || "").trim(),
+  });
+}
+
+function cloneJson(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function readKbCache(key) {
+  if (!kbCacheEnabled) return null;
+  const hit = kbCache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.createdAt > KB_CACHE_TTL_MS) {
+    kbCache.delete(key);
+    return null;
+  }
+  return cloneJson(hit.payload);
+}
+
+function writeKbCache(key, payload) {
+  if (!kbCacheEnabled) return;
+  kbCache.set(key, { createdAt: Date.now(), payload: cloneJson(payload) });
+}
+
 // ─── Model fallback chain (Gemini) ────────────────────────────────────────
 const MODEL_FALLBACK_CHAIN = [
   "gemini-2.5-flash",
@@ -575,6 +609,12 @@ app.post("/api/build-kb", async (req, res) => {
       type: businessType,
       tone: tone || "Friendly",
     };
+    const cacheKey = kbCacheKey({ websiteUrl, businessType, companyName, location, tone: ctx.tone });
+    const cachedPayload = readKbCache(cacheKey);
+    if (cachedPayload) {
+      cachedPayload.meta = { ...(cachedPayload.meta || {}), cacheHit: true };
+      return res.json(cachedPayload);
+    }
 
     // 1. CSV library match (gated on score floor — weak matches must NOT
     //    bleed cross-category offers into the dashboard).
@@ -717,7 +757,7 @@ app.post("/api/build-kb", async (req, res) => {
       if (extras.length > 0) benefitsByOffer[offer] = [...current, ...extras];
     }
 
-    return res.json({
+    const payload = {
       offers,
       subOffers,
       benefitsByOffer,
@@ -729,8 +769,11 @@ app.post("/api/build-kb", async (req, res) => {
           : null,
         aiChipCount: aiChips.length,
         csvChipCount: offers.length - aiChips.length,
+        cacheHit: false,
       },
-    });
+    };
+    writeKbCache(cacheKey, payload);
+    return res.json(payload);
   } catch (err) {
     console.error("build-kb error:", err);
     return res.status(500).json({ error: err?.message || "Unknown server error" });
@@ -754,6 +797,7 @@ app.post("/api/refine-instruction", async (req, res) => {
     "- Max 2 sentences, under 240 characters total.",
     "- If the user says 'no X' or 'don't X', state what to use instead — never leave a void.",
     "- Be specific and visual: name exact objects, materials, colors, positions, lighting.",
+    "- Correct spelling, grammar, punctuation, and sentence capitalization.",
     "- Do not touch brand, offer, benefits, or logo instructions.",
     "- Plain text only. No quotes, no labels, no markdown.",
   ].join("\n");

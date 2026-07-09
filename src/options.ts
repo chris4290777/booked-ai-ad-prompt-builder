@@ -95,6 +95,30 @@ export const ctas = [
 export const aspectRatios = ["1:1", "4:5", "9:16", "1.91:1", "3:4"];
 export const expressions = ["Happy", "Confident", "Focused", "Irritated", "Angry"];
 
+export interface QuickCommunicationType {
+  id: string;
+  label: string;
+  offer: string | null;
+  benefits: string[];
+  suggestedCta?: string;
+}
+
+export const quickCommunicationTypes: QuickCommunicationType[] = [
+  { id: "website", label: "Use Website Offer", offer: null, benefits: [] },
+  { id: "promotion", label: "Promotion", offer: "Promotion", benefits: ["Save More Today", "Easy To Book", "Local Service Help", "Limited Availability"], suggestedCta: "Claim This Offer" },
+  { id: "flash-sale", label: "Flash Sale", offer: "Flash Sale", benefits: ["Short-Term Savings", "Fast Booking", "Limited Spots", "Act Before It Ends"], suggestedCta: "Claim This Offer" },
+  { id: "limited-time-offer", label: "Limited-Time Offer", offer: "Limited-Time Offer", benefits: ["Available For A Limited Time", "Simple Booking", "Great Value", "Local Service Support"], suggestedCta: "Claim This Offer" },
+  { id: "seasonal-special", label: "Seasonal Special", offer: "Seasonal Special", benefits: ["Ready For The Season", "Protect Your Investment", "Book Ahead", "Peace Of Mind"], suggestedCta: "Book Now" },
+  { id: "new-customer-offer", label: "New Customer Offer", offer: "New Customer Offer", benefits: ["Easy First Visit", "Friendly Local Service", "Simple Next Step", "Start With Confidence"], suggestedCta: "Claim This Offer" },
+  { id: "service-reminder", label: "Service Reminder", offer: "Service Reminder", benefits: ["Stay On Schedule", "Avoid Bigger Problems", "Keep Things Running", "Book Before It's Missed"], suggestedCta: "Book Now" },
+  { id: "open-appointments", label: "Open Appointments", offer: "Open Appointments", benefits: ["Appointments Available", "Easy Scheduling", "Flexible Time Slots", "Book Before Spots Fill"], suggestedCta: "Book Now" },
+  { id: "last-minute-booking", label: "Last-Minute Booking", offer: "Last-Minute Availability", benefits: ["Open Spots This Week", "Quick Booking", "Fast Service Options", "Limited Appointment Times"], suggestedCta: "Book Now" },
+  { id: "new-service-announcement", label: "New Service Announcement", offer: "New Service Available", benefits: ["Now Available Locally", "Helpful New Option", "Easy To Get Started", "Built For Your Needs"], suggestedCta: "Learn More" },
+  { id: "free-quote", label: "Free Quote", offer: "Free Quote", benefits: ["Know Your Options", "No Pressure", "Clear Next Steps", "Fast Local Response"], suggestedCta: "Get a Free Quote" },
+  { id: "review-request", label: "Review Request", offer: "Review Request", benefits: ["Share Your Experience", "Support A Local Business", "Help Others Choose", "Takes Just A Minute"], suggestedCta: "Learn More" },
+  { id: "helpful-tip", label: "Helpful Tip", offer: "Helpful Service Tip", benefits: ["Know What To Watch For", "Avoid Common Problems", "Make Better Decisions", "Simple Local Advice"], suggestedCta: "Learn More" },
+];
+
 export const formats: PlatformFormat[] = [
   { id: "fb-portrait-feed",     platform: "Facebook",  name: "Portrait / Feed Ad",              aspectRatio: "4:5",    resolution: "1080×1350" },
   { id: "fb-square-carousel",   platform: "Facebook",  name: "Square / Carousel",               aspectRatio: "1:1",    resolution: "1080×1080" },

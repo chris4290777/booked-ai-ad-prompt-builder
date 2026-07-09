@@ -13,11 +13,13 @@ export async function fetchBusinessKnowledgeBase(
   url: string,
   businessType: string,
   companyName: string = "",
+  location: string = "",
+  tone: string = "",
 ): Promise<KBPayload> {
   const response = await fetch("/api/build-kb", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ websiteUrl: url, businessType, companyName }),
+    body: JSON.stringify({ websiteUrl: url, businessType, companyName, location, tone }),
   });
 
   if (!response.ok) {

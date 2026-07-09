@@ -10,9 +10,39 @@ const sceneVariants = [
   "Subject in a candid natural pose, fully engaged in the activity.",
 ];
 
-function pickSceneVariant(seed: string): string {
+const characterVariants = [
+  "Primary person has short dark hair, oval face, medium build, and calm professional presence.",
+  "Primary person has shoulder-length warm brown hair, softer facial features, and relaxed approachable posture.",
+  "Primary person has neatly styled black hair, sharper jawline, athletic build, and focused confident expression.",
+  "Primary person has light brown hair, rounder face, average build, and natural friendly energy.",
+  "Primary person has tied-back dark hair, defined cheekbones, slim build, and attentive working posture.",
+  "Primary person has wavy medium-length hair, broader shoulders, and a grounded capable presence.",
+];
+
+const compositionVariants = [
+  "Camera angle is eye-level with clean negative space reserved for ad text.",
+  "Camera angle is a slight high three-quarter view with the service action clearly visible.",
+  "Camera angle is a medium close-up with the subject and hands readable but not crowded.",
+  "Camera angle is a wider environmental view showing the business setting without clutter.",
+  "Camera angle is a candid side angle with natural depth and clean ad-copy space.",
+  "Camera angle is a polished editorial crop with the person offset from the text area.",
+];
+
+const IMAGE_CLEANLINESS_DIRECTION =
+  "Keep the entire subject area clean and naturally rendered, with plain realistic surfaces, even daylight, soft shadow transitions, crisp subject edges, smooth fabric rendering, and a polished commercial photo finish around the person, clothing, hair, hands, and nearby objects.";
+
+function pickVariant(items: string[], seed: string, salt = 0): string {
   const total = seed.split("").reduce((sum, c) => sum + c.charCodeAt(0), 0);
-  return sceneVariants[total % sceneVariants.length];
+  return items[(total + salt) % items.length];
+}
+
+function buildSceneVariation(seed: string) {
+  return [
+    pickVariant(sceneVariants, seed, 0),
+    pickVariant(characterVariants, seed, 3),
+    pickVariant(compositionVariants, seed, 7),
+    "These variation details may change between regenerations, but business name, location, offer, benefits, CTA, logo rules, palette, and platform specs must remain exactly as provided.",
+  ].join(" ");
 }
 
 const expressionGuidance: Record<string, string> = {
@@ -156,13 +186,31 @@ function getActiveAssetReferences(state: BuilderState, productAssetReferences: s
   return productAssetReferences.filter((reference) => reference.toLowerCase().includes(state.socialPlatform.toLowerCase()));
 }
 
-function pickByText<T>(items: T[], seed: string) {
-  const total = seed.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  return items[total % items.length];
-}
+function buildAnatomyGuard(state: BuilderState, offer: string) {
+  const context = [
+    state.businessType,
+    offer,
+    state.specialInstructions,
+    state.refinedInstructions,
+  ].join(" ").toLowerCase();
+  const base =
+    "Human anatomy guard: render anatomically plausible people only. " +
+    "Every visible body must have one head, one neck, one torso, two arms, two hands, two legs where visible, and natural joints. " +
+    "Hands must have five fingers each with realistic size, knuckles, and wrist connection. " +
+    "Avoid extra limbs, duplicate faces, merged bodies, detached hands, floating fingers, twisted wrists, rubber arms, impossible shoulders, mismatched skin seams, cloned heads, or body parts entering from outside the frame.";
 
-function sentenceList(items: string[], count: number) {
-  return items.slice(0, count).join(" ");
+  if (/\b(massage|spa|bodywork|physio|physiotherapy|chiropractic|therapy|therapist|patient|client|treatment|facial|skin|nail|hair|waxing)\b/.test(context)) {
+    return (
+      base +
+      " Body-contact scene guard: show exactly one service provider and exactly one client unless explicitly requested otherwise. " +
+      "Keep the client as one continuous body on the treatment table, with one face/head, one torso, and limbs connected naturally under towels or linens. " +
+      "The provider's arms must connect clearly from shoulders to elbows to wrists to hands. " +
+      "Hands should rest naturally on the treatment area; do not merge provider hands with the client's limbs. " +
+      "Use towels, sheets, and camera angle to simplify anatomy; crop out complex limbs rather than inventing extra body parts."
+    );
+  }
+
+  return base;
 }
 
 export interface KBContext {
@@ -211,7 +259,7 @@ export function buildPrompt(
     ? kbBenefits.slice(0, 6).join(" · ")
     : overrides?.benefits?.length
       ? overrides.benefits.slice(0, 6).join(" · ")
-      : product.featureBubbles.slice(0, 6).join(" · ");
+      : "Select Benefit Statements Before Generating";
   const palettePreset = colorPresets.find((p) => p.id === state.paletteId) ?? colorPresets[0];
   const colorDirection = buildColorDirection(palettePreset, assets?.autoAccentHex);
   const activeAssetReferences = getActiveAssetReferences(state, product.assetReferences);
@@ -229,6 +277,7 @@ export function buildPrompt(
             : `Use the ${state.socialPlatform} follow card reference only. Do not show the other platform's card.`
         }`
       : "";
+  const anatomyGuard = buildAnatomyGuard(state, hook);
 
   const sections = [
     {
@@ -249,7 +298,7 @@ export function buildPrompt(
     },
     {
       heading: "Image Prompt",
-      body: `Scene: a ${businessType} environment with one clear focal subject — a professional providing ${hook} services.${companyName ? ` Company: ${companyName}.` : ""}${locationArea ? ` Location: ${locationArea}.` : ""} Facial expression guidance: ${expressionGuidance[state.expression]}. Scene framing: ${pickSceneVariant(String(variantSeed ?? Math.random()))} If more than one person appears in the scene, each figure MUST be visually distinct — they are different real people, not twins or clones. Differentiate each person through hair style, hair length, hair colour, facial structure, jawline shape, nose shape, eye shape, brow shape, skin tone, age appearance, height, and body build. For example: one with short dark hair and a round face, the other with longer lighter hair and a sharper jawline. One noticeably taller or broader than the other. Small natural differences in skin tone are fine but extreme ethnic contrast is not required — focus the distinction on individual features and personal appearance, the way two real coworkers or strangers would naturally look different from each other. Never render two people who could be mistaken for the same person or siblings.${socialPlatformDirection}`,
+      body: `Scene: a ${businessType} environment with one clear focal subject — a professional providing ${hook} services.${companyName ? ` Company: ${companyName}.` : ""}${locationArea ? ` Location: ${locationArea}.` : ""} Facial expression guidance: ${expressionGuidance[state.expression]}. Scene and character variation: ${buildSceneVariation(String(variantSeed ?? Math.random()))} If more than one person appears in the scene, each figure MUST be visually distinct — they are different real people, not twins or clones. Differentiate each person through hair style, hair length, hair colour, facial structure, jawline shape, nose shape, eye shape, brow shape, skin tone, age appearance, height, and body build. For example: one with short dark hair and a round face, the other with longer lighter hair and a sharper jawline. One noticeably taller or broader than the other. Small natural differences in skin tone are fine but extreme ethnic contrast is not required — focus the distinction on individual features and personal appearance, the way two real coworkers or strangers would naturally look different from each other. Never render two people who could be mistaken for the same person or siblings. ${anatomyGuard}${socialPlatformDirection}`,
     },
     {
       heading: "Visual Direction",
@@ -269,12 +318,16 @@ export function buildPrompt(
       })(),
     },
     {
+      heading: "Image Cleanliness",
+      body: IMAGE_CLEANLINESS_DIRECTION,
+    },
+    {
       heading: "Platform Specs",
       body: `${format.platform} ${format.name}. Aspect ratio ${format.aspectRatio}. Resolution ${format.resolution}. Keep text inside safe margins and make the main headline readable on mobile.`,
     },
     {
       heading: "Negative Constraints",
-      body: "Avoid guaranteed revenue claims, guaranteed booking claims, fake statistics, exaggerated promises, overstuffed text, random fake logos, unreadable text, generic agency language, cluttered layouts, distorted hands, and accidental brand marks. Do not include unsupported claims or fabricated metrics. LOGO ASSET PROTECTION (applies regardless of visual style): The uploaded brand logo PNG is a real asset — do not redraw, recreate, reinterpret, illustrate, or stylise it to match any visual or animated style selected above. Place it exactly as provided. This rule overrides any illustrated, toon, comic, pixel, or painterly treatment applied to the rest of the image.",
+      body: "Avoid guaranteed revenue claims, guaranteed booking claims, fake statistics, exaggerated promises, overstuffed text, random fake logos, unreadable text, generic agency language, cluttered layouts, distorted hands, extra fingers, missing fingers, extra limbs, duplicate heads, merged bodies, detached hands, floating arms, impossible joints, and accidental brand marks. Do not include unsupported claims or fabricated metrics. LOGO ASSET PROTECTION (applies regardless of visual style): The uploaded brand logo PNG is a real asset — do not redraw, recreate, reinterpret, illustrate, or stylise it to match any visual or animated style selected above. Place it exactly as provided. This rule overrides any illustrated, toon, comic, pixel, or painterly treatment applied to the rest of the image.",
     },
     ...((() => {
       const override = state.refinedInstructions?.trim() || state.specialInstructions?.trim();
@@ -287,7 +340,7 @@ export function buildPrompt(
   ];
 
   return {
-    title: `${product.name} for ${companyName || businessType}${locationArea ? ` — ${locationArea}` : ""}`,
+    title: `${companyName || businessType}${locationArea ? ` — ${locationArea}` : ""}`,
     sections,
     fullText: sections.map((section) => `${section.heading}\n${section.body}`).join("\n\n"),
   };
