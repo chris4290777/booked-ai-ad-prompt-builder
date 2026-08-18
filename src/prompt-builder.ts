@@ -65,7 +65,7 @@ function buildBlogToneVisual(tone: string) {
 
 function buildVerticalOverlaySafeZone(formatAspectRatio: string): string {
   if (formatAspectRatio !== "9:16") return "";
-  return " 9:16 overlay safe zone: reserve the bottom 25-30% of the image as a platform-overlay readability zone for TikTok, Instagram Reels, Facebook Reels, and similar vertical placements. Do not place CTA buttons, offer chips, benefit bubbles, readable text, logos, faces, hands, or important product/service details in that bottom zone. Put all readable text and key selling elements above the bottom safe zone. Do not make the bottom zone pure white or very bright; use a clean, low-detail, medium-to-dark brand-toned background, soft dark gradient, blurred nonessential scene detail, or subtle brand-color wash so white platform captions and UI remain readable.";
+  return " 9:16 mandatory social overlay safe zones: treat the canvas like a vertical grid. The top 12% is a blank header band: uninterrupted empty background only, with the first visible logo, headline, text, icon, face, hand, tool, product detail, or focal subject starting below about 13% of canvas height. The main headline should live roughly between 15% and 38% height, not at the very top edge. The bottom 12% is a blank footer band for native mobile UI overlays: uninterrupted empty background only, with all CTA buttons, offer chips, benefit chips, readable text, logos, faces, hands, and important subject details ending above about 88% of canvas height. Place the CTA in the lower-middle action area, roughly 76-84% height, never touching the footer band. Keep any bottom darkening subtle, feathered, and confined to the bottom 8-12%; do not let the blue/dark fade climb into the CTA, person, or benefit chips. Do not create a solid blue bar, dark rectangle, footer banner, hard horizontal stripe, or visible panel at the bottom. The bottom band must not be pure white or very bright; use the existing scene/background softly darkened, blurred nonessential detail, or a gentle brand-color shadow wash so white platform captions and UI remain readable. Keep both safe zones visually obvious, not implied.";
 }
 
 const expressionGuidance: Record<string, string> = {
@@ -173,7 +173,7 @@ function calcLogoPct(logoW: number, logoH: number, formatAspectRatio: string): s
   return `${Math.max(pct, 8)}%`;
 }
 
-function buildLogoDirection(hasUserLogo: boolean, isLightBackground: boolean, logoPct: string): string {
+function buildLogoDirection(hasUserLogo: boolean, isLightBackground: boolean, logoPct: string, formatAspectRatio: string): string {
   if (!hasUserLogo) {
     return "No brand logo provided. Do not generate, invent, or place any logo. Leave the brand corner clean and uncluttered.";
   }
@@ -182,8 +182,12 @@ function buildLogoDirection(hasUserLogo: boolean, isLightBackground: boolean, lo
     ? " The logo may contain white elements — place it exactly as attached against the light background without adding any backing, card, or container behind it."
     : "";
 
+  const logoPlacement = formatAspectRatio === "9:16"
+    ? `place the exact attached transparent PNG in the upper-left or upper-right brand area at ${logoPct} of ad width, with the logo's top edge below the blank top safe zone around 13-15% of canvas height. Do not place the logo at the true top edge or inside the top 12% blank header band`
+    : `place the exact attached transparent PNG in the top-left or top-right corner at ${logoPct} of ad width`;
+
   return (
-    `Brand logo: place the exact attached transparent PNG in the top-left or top-right corner at ${logoPct} of ad width as a brand signature. ` +
+    `Brand logo: ${logoPlacement} as a brand signature. ` +
     "Do not redraw, redesign, recreate, recolor, or modify it in any way. No backing shape of any kind behind it. " +
     "If it cannot be placed exactly as attached, leave the space blank." +
     lightGuard
@@ -224,8 +228,9 @@ function buildAnatomyGuard(state: BuilderState, offer: string) {
   const base =
     "Human anatomy guard: render anatomically plausible people only. " +
     "Every visible body must have one head, one neck, one torso, two arms, two hands, two legs where visible, and natural joints. " +
+    "If one person is shown, show exactly one continuous body with exactly two arms and exactly two hands total. Each arm must connect visibly from shoulder to elbow to wrist to hand. Prefer simple, readable arm poses; if the person is holding a tool, show one working hand and one resting or supporting hand. " +
     "Hands must have five fingers each with realistic size, knuckles, and wrist connection. " +
-    "Avoid extra limbs, duplicate faces, merged bodies, detached hands, floating fingers, twisted wrists, rubber arms, impossible shoulders, mismatched skin seams, cloned heads, or body parts entering from outside the frame.";
+    "Avoid third arms, extra hands, duplicate forearms, hidden duplicate limbs, extra limbs, duplicate faces, merged bodies, detached hands, floating fingers, twisted wrists, rubber arms, impossible shoulders, mismatched skin seams, cloned heads, or body parts entering from outside the frame.";
 
   if (/\b(massage|spa|bodywork|physio|physiotherapy|chiropractic|therapy|therapist|patient|client|treatment|facial|skin|nail|hair|waxing)\b/.test(context)) {
     return (
@@ -267,7 +272,7 @@ export function buildBlogPrompt(
     ? calcLogoPct(assets.logoWidth, assets.logoHeight, format.aspectRatio)
     : "12%";
   const colorDirection = buildColorDirection(palettePreset, assets?.autoAccentHex, assets?.autoSecondaryHex);
-  const activeLogoDirection = buildLogoDirection(hasUserLogo, isLightPalette, logoPct);
+  const activeLogoDirection = buildLogoDirection(hasUserLogo, isLightPalette, logoPct, format.aspectRatio);
   const requiredAssets = hasUserLogo
     ? "Brand logo: the transparent PNG image attached by the user to this conversation. Use this exact attached image as an optional brand signature only; do not generate a fake logo or substitute text."
     : "Brand logo: none provided or not requested. Do not generate or invent a logo. Leave the brand area clean.";
@@ -393,7 +398,7 @@ export function buildPrompt(
   const logoPct = (assets?.logoWidth && assets?.logoHeight)
     ? calcLogoPct(assets.logoWidth, assets.logoHeight, format.aspectRatio)
     : "12%";
-  const activeLogoDirection = buildLogoDirection(hasUserLogo, isLightPalette, logoPct);
+  const activeLogoDirection = buildLogoDirection(hasUserLogo, isLightPalette, logoPct, format.aspectRatio);
   const socialPlatformDirection =
     state.productId === "nfc_social_station"
       ? ` Selected social platform for the follow station: ${state.socialPlatform}. ${
