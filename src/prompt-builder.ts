@@ -45,6 +45,29 @@ function buildSceneVariation(seed: string) {
   ].join(" ");
 }
 
+function shouldUseBlogSceneVariation(sceneDirection: string) {
+  const text = sceneDirection.toLowerCase();
+  if (/\b(no people|avoid showing people|do not show people|without people|no worker|avoid workers)\b/.test(text)) return false;
+  if (/\b(split[- ]screen|side[- ]by[- ]side|comparison|correct|incorrect|before\/after|before and after)\b/.test(text)) return false;
+  if (/\b(diagram|cutaway|checklist|form|process visual)\b/.test(text)) return false;
+  return true;
+}
+
+function buildBlogToneVisual(tone: string) {
+  const base = toneSpecs[tone]?.visual ?? "";
+  return base
+    .replace(/\bCTA button[^.]*\./gi, "")
+    .replace(/\bBubbles?[^.]*\./gi, "")
+    .replace(/\bbubbles?\b/gi, "supporting visual elements")
+    .replace(/\bad-copy\b/gi, "blog text")
+    .trim();
+}
+
+function buildVerticalOverlaySafeZone(formatAspectRatio: string): string {
+  if (formatAspectRatio !== "9:16") return "";
+  return " 9:16 overlay safe zone: reserve the bottom 25-30% of the image as a platform-overlay readability zone for TikTok, Instagram Reels, Facebook Reels, and similar vertical placements. Do not place CTA buttons, offer chips, benefit bubbles, readable text, logos, faces, hands, or important product/service details in that bottom zone. Put all readable text and key selling elements above the bottom safe zone. Do not make the bottom zone pure white or very bright; use a clean, low-detail, medium-to-dark brand-toned background, soft dark gradient, blurred nonessential scene detail, or subtle brand-color wash so white platform captions and UI remain readable.";
+}
+
 const expressionGuidance: Record<string, string> = {
   Happy: "Warm, friendly, approachable, positive, natural smile. Avoid exaggerated grin.",
   Confident: "Calm, capable, professional, trustworthy, slight smile, direct eye contact, relaxed posture.",
@@ -58,9 +81,10 @@ const expressionGuidance: Record<string, string> = {
 // accent application, text/contrast). Replaces the old flat styleDirections
 // name→string lookup so the prompt always reflects the exact hex values the
 // user selected rather than a manually maintained description.
-function buildColorDirection(preset: ColorPreset, autoAccentHex?: string): string {
+function buildColorDirection(preset: ColorPreset, autoAccentHex?: string, autoSecondaryHex?: string | null): string {
   if (preset.variant === "auto-dark" || preset.variant === "auto-light") {
     const accent = autoAccentHex || "#20c8ff";
+    const secondary = autoSecondaryHex && autoSecondaryHex !== accent ? autoSecondaryHex : "";
     const isDark = preset.variant === "auto-dark";
     const bgLayer = isDark
       ? `Background layer: dark charcoal base (${preset.baseHex}), high-contrast professional environment.`
@@ -68,11 +92,15 @@ function buildColorDirection(preset: ColorPreset, autoAccentHex?: string): strin
     const textLayer = isDark
       ? `Text layer: white or silver throughout; headlines in crisp white, secondary text in light silver/gray.`
       : `Text layer: deep charcoal throughout; headlines in near-black (#111827), secondary text in slate gray.`;
+    const secondaryLayer = secondary
+      ? `Secondary brand accent: ${secondary} — use this for small highlights, CTA edge accents, selected icons, divider strokes, and subtle emphasis details so the ad reflects the full logo palette. `
+      : "";
     return (
       `Logo-sampled color theme. ${bgLayer} ` +
-      `Accent layer: ${accent} — apply this exact hex to CTA buttons, feature bubble borders, icon accents, glow effects, panel/card borders, divider lines, and highlighted headline words. ` +
+      `Primary brand color: ${accent} — apply this exact hex to CTA buttons, feature bubble borders, icon accents, panel/card borders, divider lines, and highlighted headline words. ` +
+      secondaryLayer +
       `${textLayer} ` +
-      `Do not introduce any colors outside this palette. Do not fall back to generic cyan or electric blue unless ${accent} is in that range.`
+      `Do not introduce colors outside the logo-sampled palette. Do not fall back to generic cyan or electric blue unless ${accent}${secondary ? ` or ${secondary}` : ""} is in that range.`
     );
   }
 
@@ -221,8 +249,105 @@ export interface KBContext {
 export interface AssetContext {
   hasUserLogo?: boolean;
   autoAccentHex?: string;
+  autoSecondaryHex?: string | null;
   logoWidth?: number;
   logoHeight?: number;
+}
+
+export function buildBlogPrompt(
+  state: BuilderState,
+  assets?: AssetContext,
+  variantSeed?: number,
+) {
+  const format = formats.find((item) => item.id === state.platformFormatId) ?? formats[0];
+  const palettePreset = colorPresets.find((p) => p.id === state.paletteId) ?? colorPresets[0];
+  const isLightPalette = palettePreset.variant === "light" || palettePreset.variant === "auto-light";
+  const hasUserLogo = !!assets?.hasUserLogo && state.blogIncludeLogo !== false;
+  const logoPct = (assets?.logoWidth && assets?.logoHeight)
+    ? calcLogoPct(assets.logoWidth, assets.logoHeight, format.aspectRatio)
+    : "12%";
+  const colorDirection = buildColorDirection(palettePreset, assets?.autoAccentHex, assets?.autoSecondaryHex);
+  const activeLogoDirection = buildLogoDirection(hasUserLogo, isLightPalette, logoPct);
+  const requiredAssets = hasUserLogo
+    ? "Brand logo: the transparent PNG image attached by the user to this conversation. Use this exact attached image as an optional brand signature only; do not generate a fake logo or substitute text."
+    : "Brand logo: none provided or not requested. Do not generate or invent a logo. Leave the brand area clean.";
+  const styleKey = (state.animatedCharacterStyle ?? state.adStyle ?? DEFAULT_STYLE) as AdStyle;
+  const spec = STYLE_BLOCKS[styleKey] ?? STYLE_BLOCKS[DEFAULT_STYLE];
+  const purpose = state.blogImagePurpose?.trim() || "In-section blog visual";
+  const wantsImageText = state.blogIncludeText !== false;
+  const heroLine = state.blogHeroLine?.trim() || (wantsImageText ? "Blog Section Visual" : "No on-image text requested");
+  const sectionText = state.blogSectionText?.trim() || "";
+  const audienceContext = state.blogAudienceContext?.trim() || "general local business audience";
+  const sceneDirection = state.blogSceneDirection?.trim()
+    || "Create a clear, realistic visual metaphor for the blog section's main idea using a relevant business setting.";
+  const blogSceneVariation = shouldUseBlogSceneVariation(sceneDirection)
+    ? ` Scene and composition variation: ${buildSceneVariation(String(variantSeed ?? Math.random()))}`
+    : " Follow the selected scene direction exactly. Do not add people, character details, camera angles, or alternate composition ideas that conflict with the requested comparison, diagram, checklist, or no-people scene.";
+  const blogToneVisual = buildBlogToneVisual(state.tone);
+  const textRule = !wantsImageText
+    ? "Do not render any text, headline, labels, captions, CTA buttons, offer chips, benefit chips, badges, or written callouts inside the image."
+    : `Render exactly one short headline text element on the image: "${heroLine}". Keep it readable on mobile, placed inside safe margins, with no other text elements.`;
+
+  const sections = [
+    {
+      heading: "Blog Image Goal",
+      body: `${purpose}. Create one polished image that supports a specific blog section, not a sales ad layout.`,
+    },
+    {
+      heading: "Hero Line",
+      body: heroLine,
+    },
+    {
+      heading: "Blog Section Context",
+      body: sectionText,
+    },
+    {
+      heading: "Audience Context",
+      body: audienceContext,
+    },
+    {
+      heading: "Required Assets",
+      body: requiredAssets,
+    },
+    {
+      heading: "Image Prompt",
+      body: `Scene direction: ${sceneDirection} Use the Blog Section Context as the source of meaning and make the visual feel immediately related to that section. Do not use offer chips, benefit chips, CTA buttons, price labels, review badges, poster frames, or promotional ad modules. Keep the composition editorial, natural, useful, and suitable for a blog article.${blogSceneVariation}`,
+    },
+    {
+      heading: "Visual Direction",
+      body: `${colorDirection} Tone: ${state.tone}. Visual treatment for this tone: ${blogToneVisual} ${activeLogoDirection} ${textRule}`,
+    },
+    {
+      heading: "Visual Style",
+      body:
+        `VISUAL STYLE: ${styleKey}\n` +
+        `PHOTOGRAPHY: ${spec.photography}\n` +
+        `TYPOGRAPHY: ${spec.typography}\n` +
+        `CHIPS: Do not create ad chips, offer bubbles, benefit bubbles, CTA modules, or promotional UI badges for blog images.`,
+    },
+    {
+      heading: "Blog Editorial Guard",
+      body: "This must look like an editorial blog image, not a service ad, poster, flyer, YouTube thumbnail, or social media promotion. Use natural daylight or soft editorial lighting, realistic colors, restrained composition, and subtle article-style text only if requested. Avoid oversized all-caps headlines, dramatic dark overlays, neon glow effects, tech frames, glowing borders, poster-style typography, high-contrast promo banners, and sales-graphic layouts.",
+    },
+    {
+      heading: "Image Cleanliness",
+      body: IMAGE_CLEANLINESS_DIRECTION,
+    },
+    {
+      heading: "Platform Specs",
+      body: `${format.platform} ${format.name}. Aspect ratio ${format.aspectRatio}. Resolution ${format.resolution}. Keep all important subjects and any headline text inside safe margins.${buildVerticalOverlaySafeZone(format.aspectRatio)}`,
+    },
+    {
+      heading: "Negative Constraints",
+      body: "Avoid ad-style layouts, CTA buttons, offer chips, benefit chips, fake statistics, exaggerated claims, cluttered text, random fake logos, unreadable text, oversized all-caps headlines, neon frames, tech borders, glow effects, poster backgrounds, distorted hands, extra fingers, missing fingers, extra limbs, duplicate heads, merged bodies, detached hands, floating arms, impossible joints, and accidental brand marks. If a logo is attached, place it exactly as provided or leave clean space rather than inventing a replacement.",
+    },
+  ];
+
+  return {
+    title: `Blog Image — ${heroLine}`,
+    sections,
+    fullText: sections.map((section) => `${section.heading}\n${section.body}`).join("\n\n"),
+  };
 }
 
 export function buildPrompt(
@@ -261,7 +386,7 @@ export function buildPrompt(
       ? overrides.benefits.slice(0, 6).join(" · ")
       : "Select Benefit Statements Before Generating";
   const palettePreset = colorPresets.find((p) => p.id === state.paletteId) ?? colorPresets[0];
-  const colorDirection = buildColorDirection(palettePreset, assets?.autoAccentHex);
+  const colorDirection = buildColorDirection(palettePreset, assets?.autoAccentHex, assets?.autoSecondaryHex);
   const activeAssetReferences = getActiveAssetReferences(state, product.assetReferences);
   const requiredAssets = buildRequiredAssets(activeAssetReferences, hasUserLogo);
   const isLightPalette = palettePreset.variant === "light" || palettePreset.variant === "auto-light";
@@ -323,7 +448,7 @@ export function buildPrompt(
     },
     {
       heading: "Platform Specs",
-      body: `${format.platform} ${format.name}. Aspect ratio ${format.aspectRatio}. Resolution ${format.resolution}. Keep text inside safe margins and make the main headline readable on mobile.`,
+      body: `${format.platform} ${format.name}. Aspect ratio ${format.aspectRatio}. Resolution ${format.resolution}. Keep text inside safe margins and make the main headline readable on mobile.${buildVerticalOverlaySafeZone(format.aspectRatio)}`,
     },
     {
       heading: "Negative Constraints",

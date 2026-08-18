@@ -12,6 +12,12 @@ export interface NormalizedLogo {
   height: number;
 }
 
+export interface ExtractedLogoPalette {
+  primary: string | null;
+  secondary: string | null;
+  contrast: string;
+}
+
 const ACCEPTED_MIME = /^image\/(png|jpe?g|webp|gif|bmp|svg\+xml|avif)$/i;
 const MAX_LONG_EDGE = 2048;     // raster cap
 const SVG_RENDER_EDGE = 1024;   // SVG default render size if intrinsic missing
@@ -104,22 +110,38 @@ export async function normalizeLogoToPng(file: File): Promise<NormalizedLogo> {
   return { dataUrl, filename, width, height };
 }
 
-// Samples the most chromatically vivid opaque pixel from the logo. Returns
-// null when no saturated pixel is found (white, black, or greyscale logo) so
-// callers can detect mono logos and offer the dark-backed adjustment UI.
-export async function extractDominantAccent(logo: NormalizedLogo): Promise<string | null> {
+function hexToRgb(hex: string) {
+  const value = hex.replace("#", "");
+  return {
+    r: parseInt(value.slice(0, 2), 16),
+    g: parseInt(value.slice(2, 4), 16),
+    b: parseInt(value.slice(4, 6), 16),
+  };
+}
+
+function colorDistance(a: string, b: string) {
+  const ca = hexToRgb(a);
+  const cb = hexToRgb(b);
+  return Math.hypot(ca.r - cb.r, ca.g - cb.g, ca.b - cb.b);
+}
+
+// Samples the most useful brand colors from the logo. Primary prefers the
+// most visible saturated color; secondary prefers a clearly different vivid
+// color. White/black/greyscale are ignored as accents and reserved for contrast.
+export async function extractLogoPalette(logo: NormalizedLogo): Promise<ExtractedLogoPalette> {
   const img = await loadImage(logo.dataUrl);
   const size = Math.min(logo.width, logo.height, 128);
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext("2d", { alpha: true });
-  if (!ctx) return null;
+  if (!ctx) return { primary: null, secondary: null, contrast: "#ffffff" };
   ctx.drawImage(img, 0, 0, size, size);
   const { data } = ctx.getImageData(0, 0, size, size);
 
-  let bestHex = "";
-  let bestSat = 0;
+  const buckets = new Map<string, { r: number; g: number; b: number; count: number; sat: number; light: number }>();
+  let lightPixels = 0;
+  let darkPixels = 0;
 
   for (let i = 0; i < data.length; i += 4) {
     const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
@@ -129,13 +151,51 @@ export async function extractDominantAccent(logo: NormalizedLogo): Promise<strin
     const l = (max + min) / 2;
     const d = max - min;
     const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+    if (l > 0.88 && s < 0.18) lightPixels += 1;
+    if (l < 0.16 && s < 0.28) darkPixels += 1;
     if (l < 0.12 || l > 0.88 || s < 0.28) continue;
-    if (s > bestSat) {
-      bestSat = s;
-      bestHex = `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
-    }
+
+    const qr = Math.round(r / 24) * 24;
+    const qg = Math.round(g / 24) * 24;
+    const qb = Math.round(b / 24) * 24;
+    const key = `${qr},${qg},${qb}`;
+    const bucket = buckets.get(key) ?? { r: 0, g: 0, b: 0, count: 0, sat: 0, light: 0 };
+    bucket.r += r;
+    bucket.g += g;
+    bucket.b += b;
+    bucket.count += 1;
+    bucket.sat += s;
+    bucket.light += l;
+    buckets.set(key, bucket);
   }
-  return bestHex || null;
+
+  const candidates = Array.from(buckets.values())
+    .filter((bucket) => bucket.count >= 2)
+    .map((bucket) => {
+      const r = Math.round(bucket.r / bucket.count);
+      const g = Math.round(bucket.g / bucket.count);
+      const b = Math.round(bucket.b / bucket.count);
+      const hex = `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+      const sat = bucket.sat / bucket.count;
+      const light = bucket.light / bucket.count;
+      const score = bucket.count * (0.65 + sat) * (light > 0.18 && light < 0.82 ? 1.15 : 0.9);
+      return { hex, score };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  const primary = candidates[0]?.hex ?? null;
+  const secondary = primary
+    ? candidates.find((candidate) => colorDistance(candidate.hex, primary) >= 90)?.hex ?? null
+    : null;
+  const contrast = lightPixels >= darkPixels ? "#ffffff" : "#111827";
+
+  return { primary, secondary, contrast };
+}
+
+// Backwards-compatible single-accent helper.
+export async function extractDominantAccent(logo: NormalizedLogo): Promise<string | null> {
+  const palette = await extractLogoPalette(logo);
+  return palette.primary;
 }
 
 // Composites the logo onto a solid baseHex background and returns a new

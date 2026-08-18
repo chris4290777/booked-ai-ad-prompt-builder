@@ -15,7 +15,7 @@ import {
   tones,
   type ColorPreset,
 } from "./options";
-import { buildPrompt } from "./prompt-builder";
+import { buildBlogPrompt, buildPrompt } from "./prompt-builder";
 import type { BuilderState } from "./types";
 import { fetchBusinessKnowledgeBase } from "./services/kbService";
 import {
@@ -28,11 +28,12 @@ import { AD_STYLES, ANIMATED_CHARACTER_STYLES, DEFAULT_STYLE } from "./lib/style
 import {
   normalizeLogoToPng,
   downloadNormalizedLogo,
-  extractDominantAccent,
+  extractLogoPalette,
   type NormalizedLogo,
 } from "./lib/logo-normalizer";
 
 const initialState: BuilderState = {
+  mode: "ad",
   productId: "ai_receptionist",
   industry: "General Local Business",
   tone: "Professional",
@@ -47,6 +48,13 @@ const initialState: BuilderState = {
   companyName: "",
   locationArea: "",
   businessType: "",
+  blogImagePurpose: "In-section blog visual",
+  blogSectionText: "",
+  blogAudienceContext: "",
+  blogHeroLine: "",
+  blogSceneDirection: "",
+  blogIncludeText: true,
+  blogIncludeLogo: false,
 };
 
 const devTestBusinessInfo: Pick<BuilderState, "websiteUrl" | "companyName" | "locationArea" | "businessType"> = {
@@ -197,11 +205,33 @@ const PANEL_ORDER = [
   { id: "special-instructions", step: 6, title: "Special Instructions", next: null },
 ] as const;
 
-type PromptOutput = ReturnType<typeof buildPrompt>;
+type PromptOutput = ReturnType<typeof buildPrompt> | ReturnType<typeof buildBlogPrompt>;
 type QuickCommunicationOverride = {
   offer?: string;
   benefits?: string[];
 };
+type BlogOptimizedImage = {
+  originalName: string;
+  originalSize: number;
+  originalWidth: number;
+  originalHeight: number;
+  outputUrl: string;
+  outputSize: number;
+  outputWidth: number;
+  outputHeight: number;
+  filename: string;
+  altText: string;
+};
+type BlogSceneIdea = {
+  type: string;
+  title: string;
+  heroLine: string;
+  sceneDirection: string;
+  avoid: string;
+};
+
+const BLOG_IMAGE_MAX_WIDTH = 1200;
+const BLOG_IMAGE_MAX_HEIGHT = 1800;
 
 function loadInitialBuilderState(): BuilderState {
   try {
@@ -209,6 +239,56 @@ function loadInitialBuilderState(): BuilderState {
     if (ws.state) return { ...initialState, ...ws.state, specialInstructions: "", refinedInstructions: "" };
   } catch {}
   return initialState;
+}
+
+function slugifyFilenamePart(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 74);
+}
+
+function formatBytes(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 KB";
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function buildBlogImageFilename(state: BuilderState) {
+  const hero = state.blogHeroLine?.trim() || "blog-image";
+  const section = `${state.blogSectionText ?? ""} ${state.blogAudienceContext ?? ""}`.toLowerCase();
+  const topic = section.includes("automation")
+    ? "business-automation"
+    : slugifyFilenamePart(state.blogAudienceContext?.split(",")[0] ?? "");
+  const base = slugifyFilenamePart([topic, hero].filter(Boolean).join(" ")) || "blog-image";
+  return `${base}.webp`;
+}
+
+function buildBlogImageAltText(state: BuilderState) {
+  const hero = state.blogHeroLine?.trim();
+  const context = state.blogAudienceContext?.trim();
+  const section = state.blogSectionText?.toLowerCase() ?? "";
+  if (hero && section.includes("automation")) {
+    return `Blog image illustrating ${hero.toLowerCase()} for business automation planning.`;
+  }
+  if (hero && context) {
+    return `Blog image illustrating ${hero.toLowerCase()} for ${context}.`;
+  }
+  if (hero) {
+    return `Blog image illustrating ${hero.toLowerCase()}.`;
+  }
+  return "Blog image illustrating the main idea of this section.";
+}
+
+function loadImageFromUrl(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Could not read this image file."));
+    img.src = url;
+  });
 }
 
 type PanelId = typeof PANEL_ORDER[number]["id"];
@@ -230,6 +310,8 @@ function WorkflowPanel({
   hasIncomingAttention,
   doneError,
   isDone,
+  stepOverride,
+  titleOverride,
 }: {
   id: PanelId;
   activePanelId: string;
@@ -241,6 +323,8 @@ function WorkflowPanel({
   hasIncomingAttention?: boolean;
   doneError?: string | null;
   isDone?: boolean;
+  stepOverride?: number;
+  titleOverride?: string;
 }) {
   const panel = PANEL_ORDER.find((p) => p.id === id)!;
   const isActive = activePanelId === id;
@@ -258,8 +342,8 @@ function WorkflowPanel({
         onKeyDown={!isActive ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onActivate(); } } : undefined}
         aria-expanded={isActive}
       >
-        <span className="workflow-step">{panel.step}</span>
-        <span className="workflow-title">{panel.title}</span>
+        <span className="workflow-step">{stepOverride ?? panel.step}</span>
+        <span className="workflow-title">{titleOverride ?? panel.title}</span>
         {isActive
           ? <button type="button" className="workflow-done-btn" onClick={onDone}>Done</button>
           : (
@@ -418,6 +502,7 @@ function PaletteCard({
   userLogo,
   resolvedBase,
   resolvedAccent,
+  resolvedSecondary,
   contrastHex,
 }: {
   preset: ColorPreset;
@@ -426,6 +511,7 @@ function PaletteCard({
   userLogo: NormalizedLogo | null;
   resolvedBase: string;
   resolvedAccent: string;
+  resolvedSecondary?: string | null;
   contrastHex: string;
 }) {
   const isLight = preset.variant === "light" || preset.variant === "auto-light";
@@ -456,7 +542,10 @@ function PaletteCard({
         <span className="palette-card-name">{preset.name}</span>
         <div className="palette-swatch-strip">
           <span className="palette-swatch" style={{ backgroundColor: resolvedBase || "#222" }} title="Base Mood" />
-          <span className="palette-swatch" style={{ backgroundColor: resolvedAccent || "#888" }} title="UI Accent" />
+          <span className="palette-swatch" style={{ backgroundColor: resolvedAccent || "#888" }} title="Primary Accent" />
+          {resolvedSecondary && (
+            <span className="palette-swatch" style={{ backgroundColor: resolvedSecondary }} title="Secondary Accent" />
+          )}
           <span className="palette-swatch" style={{ backgroundColor: contrastHex }} title="Contrast Text" />
         </div>
       </div>
@@ -469,12 +558,14 @@ function PalettePicker({
   onChange,
   userLogo,
   autoAccentHex,
+  autoSecondaryHex,
   modeFilter,
 }: {
   value: string;
   onChange: (id: string) => void;
   userLogo: NormalizedLogo | null;
   autoAccentHex: string;
+  autoSecondaryHex?: string | null;
   modeFilter?: "dark" | "light" | null;
 }) {
   const [open, setOpen] = useState(false);
@@ -520,6 +611,9 @@ function PalettePicker({
         <span className="palette-chips" aria-hidden="true">
           <span style={{ backgroundColor: selected.baseHex || "#111" }} />
           <span style={{ backgroundColor: getAccent(selected) || "#444" }} />
+          {(selected.variant === "auto-dark" || selected.variant === "auto-light") && autoSecondaryHex && (
+            <span style={{ backgroundColor: autoSecondaryHex }} />
+          )}
         </span>
         <strong>{selected.name}</strong>
         <ChevronDown className={`palette-chevron${open ? " open" : ""}`} size={16} />
@@ -567,6 +661,7 @@ function PalettePicker({
                 userLogo={userLogo}
                 resolvedBase={preset.baseHex}
                 resolvedAccent={autoAccentHex}
+                resolvedSecondary={autoSecondaryHex}
                 contrastHex={getContrast(preset)}
               />
             ))}
@@ -670,6 +765,16 @@ function App() {
   });
 
   function advancePanel(currentId: string) {
+    if (state.mode === "blog") {
+      if (currentId === "look-and-feel") {
+        setActivePanelId("ad-settings");
+        return;
+      }
+      if (currentId === "ad-settings") {
+        setActivePanelId("");
+        return;
+      }
+    }
     const entry = PANEL_ORDER.find((p) => p.id === currentId);
     if (entry?.next) {
       setActivePanelId(entry.next);
@@ -692,6 +797,13 @@ function App() {
   const [state, setState] = useState<BuilderState>(() => {
     return loadInitialBuilderState();
   });
+  const isBlogMode = state.mode === "blog";
+  const isManualAdMode = state.mode === "ad-manual";
+  const currentLeftPanels: PanelId[] = isBlogMode
+    ? ["look-and-feel", "ad-settings"]
+    : isManualAdMode
+      ? ["brand-logo", "look-and-feel", "ad-settings"]
+    : LEFT_PANELS;
   const [generated, setGenerated] = useState<PromptOutput | null>(null);
   const [copied, setCopied] = useState(false);
   const [regenDone, setRegenDone] = useState(false);
@@ -749,7 +861,43 @@ function App() {
   });
   const [openBenefitMenu, setOpenBenefitMenu] = useState<string | null>(null);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const [heroLineLoading, setHeroLineLoading] = useState(false);
+  const [heroLineError, setHeroLineError] = useState<string | null>(null);
+  const [heroLineOptions, setHeroLineOptions] = useState<string[]>([]);
+  const [sceneRefineLoading, setSceneRefineLoading] = useState(false);
+  const [sceneRefineError, setSceneRefineError] = useState<string | null>(null);
+  const [sceneIdeasLoading, setSceneIdeasLoading] = useState(false);
+  const [sceneIdeasError, setSceneIdeasError] = useState<string | null>(null);
+  const [sceneIdeas, setSceneIdeas] = useState<BlogSceneIdea[]>([]);
+  const [blogImageBusy, setBlogImageBusy] = useState(false);
+  const [blogImageError, setBlogImageError] = useState<string | null>(null);
+  const [blogOptimizedImage, setBlogOptimizedImage] = useState<BlogOptimizedImage | null>(null);
+  const [altCopied, setAltCopied] = useState(false);
   const BENEFIT_SELECTION_CAP = 4;
+
+  useEffect(() => {
+    if (isBlogMode && ["business-info", "offer-benefits", "brand-logo", "special-instructions"].includes(activePanelId)) {
+      setActivePanelId("look-and-feel");
+    }
+  }, [isBlogMode, activePanelId]);
+
+  useEffect(() => {
+    if (isManualAdMode && activePanelId === "business-info") {
+      setActivePanelId("brand-logo");
+    }
+  }, [isManualAdMode, activePanelId]);
+
+  useEffect(() => {
+    if (isManualAdMode && quickCommunicationTypeId === WEBSITE_COMMUNICATION_TYPE_ID) {
+      setQuickCommunicationTypeId("promotion");
+    }
+  }, [isManualAdMode, quickCommunicationTypeId]);
+
+  useEffect(() => {
+    return () => {
+      if (blogOptimizedImage?.outputUrl) URL.revokeObjectURL(blogOptimizedImage.outputUrl);
+    };
+  }, [blogOptimizedImage?.outputUrl]);
 
   // Close the row "⋯" menu on outside click.
   useEffect(() => {
@@ -780,7 +928,7 @@ function App() {
     [quickCommunicationTypeId],
   );
   const usingSavedCombo = !!activeSavedCombo;
-  const usingWebsiteOffer = quickCommunicationTypeId === WEBSITE_COMMUNICATION_TYPE_ID;
+  const usingWebsiteOffer = !isManualAdMode && quickCommunicationTypeId === WEBSITE_COMMUNICATION_TYPE_ID;
   const activeManualOverride = quickCommunicationOverrides[quickCommunicationTypeId] ?? {};
   const baseManualOffer = usingSavedCombo ? activeSavedCombo.offer : activeCommunicationType.offer;
   const baseManualBenefits = usingSavedCombo ? activeSavedCombo.benefits : activeCommunicationType.benefits;
@@ -831,12 +979,6 @@ function App() {
     setOpenBenefitMenu(null);
     setGenerateError(null);
   }, [kbSelectedOffer]);
-
-  useEffect(() => {
-    if (!hasBuiltKnowledgeBase && quickCommunicationTypeId !== WEBSITE_COMMUNICATION_TYPE_ID) {
-      setQuickCommunicationTypeId(WEBSITE_COMMUNICATION_TYPE_ID);
-    }
-  }, [hasBuiltKnowledgeBase, quickCommunicationTypeId]);
 
   useEffect(() => {
     setEditingPresetOffer(false);
@@ -900,6 +1042,9 @@ function App() {
   const [autoAccentHex, setAutoAccentHex] = useState<string>(() => {
     try { return JSON.parse(localStorage.getItem(WORKSPACE_KEY) ?? "{}").autoAccentHex ?? "#20c8ff"; } catch { return "#20c8ff"; }
   });
+  const [autoSecondaryHex, setAutoSecondaryHex] = useState<string | null>(() => {
+    try { return JSON.parse(localStorage.getItem(WORKSPACE_KEY) ?? "{}").autoSecondaryHex ?? null; } catch { return null; }
+  });
   const [logoMode, setLogoMode] = useState<"dark" | "light" | null>(() => {
     try { return JSON.parse(localStorage.getItem(WORKSPACE_KEY) ?? "{}").logoMode ?? null; } catch { return null; }
   });
@@ -908,7 +1053,7 @@ function App() {
     setGenerated(null);
     setCopied(false);
     setRegenDone(false);
-  }, [state, kbSelectedOffer, selectedBenefitsByOffer, selectedManualBenefitsByType, userLogo, autoAccentHex, logoMode, quickCommunicationTypeId, quickCommunicationOverrides]);
+  }, [state, kbSelectedOffer, selectedBenefitsByOffer, selectedManualBenefitsByType, userLogo, autoAccentHex, autoSecondaryHex, logoMode, quickCommunicationTypeId, quickCommunicationOverrides]);
 
   // ─── Comprehensive workspace save ────────────────────────────────────────
   useEffect(() => {
@@ -932,6 +1077,7 @@ function App() {
       logoHeight: userLogo?.height ?? null,
       logoWasUploaded: logoWasUploaded || !!userLogo,
       autoAccentHex,
+      autoSecondaryHex,
       logoMode,
       themeMode,
       donePanels: Array.from(donePanels),
@@ -939,13 +1085,14 @@ function App() {
       quickCommunicationOverrides,
     };
     try { localStorage.setItem(WORKSPACE_KEY, JSON.stringify(snapshot)); } catch { /* quota exceeded */ }
-  }, [state, kbSelectedOffer, selectedBenefitsByOffer, selectedManualBenefitsByType, activePanelId, userLogo, autoAccentHex, logoMode, logoWasUploaded, themeMode, donePanels, quickCommunicationTypeId, quickCommunicationOverrides]);
+  }, [state, kbSelectedOffer, selectedBenefitsByOffer, selectedManualBenefitsByType, activePanelId, userLogo, autoAccentHex, autoSecondaryHex, logoMode, logoWasUploaded, themeMode, donePanels, quickCommunicationTypeId, quickCommunicationOverrides]);
 
-  // Extract dominant accent color for auto-palette cards.
+  // Extract primary and secondary brand colors for logo-matched palettes.
   useEffect(() => {
     if (!userLogo) return;
-    extractDominantAccent(userLogo).then((hex) => {
-      setAutoAccentHex(hex ?? "#20c8ff");
+    extractLogoPalette(userLogo).then((palette) => {
+      setAutoAccentHex(palette.primary ?? "#20c8ff");
+      setAutoSecondaryHex(palette.secondary);
     }).catch(() => {});
   }, [userLogo]);
 
@@ -978,6 +1125,8 @@ function App() {
   function clearUserLogo() {
     setUserLogo(null);
     setUserLogoError(null);
+    setAutoAccentHex("#20c8ff");
+    setAutoSecondaryHex(null);
     setLogoMode(null);
     setLogoWasUploaded(false);
   }
@@ -1200,10 +1349,11 @@ function App() {
     if (!activeOffer) { setPanel2DoneError("Select an offer first."); return; }
     if (activeBenefitCount < 1) { setPanel2DoneError("Select at least 1 benefit to continue."); return; }
     setPanel2DoneError(null);
-    if (LEFT_PANELS.every(id => donePanels.has(id))) {
+    markDone("offer-benefits");
+    if (currentLeftPanels.every(id => donePanels.has(id))) {
       setActivePanelId("");
     } else {
-      const nextPanel = LEFT_PANELS.find(id => !donePanels.has(id));
+      const nextPanel = currentLeftPanels.find(id => !donePanels.has(id));
       if (nextPanel) {
         setIncomingAttentionPanelId(nextPanel);
         openPanel(nextPanel);
@@ -1285,6 +1435,215 @@ function App() {
     setState((current) => ({ ...current, [key]: value }));
   }
 
+  function updateMode(mode: BuilderState["mode"]) {
+    setCopied(false);
+    setRegenDone(false);
+    setGenerateError(null);
+    setPanel1DoneError(null);
+    setPanel2DoneError(null);
+    setPanel3DoneError(null);
+    setPanel6DoneError(null);
+    if (mode === "ad-manual" && quickCommunicationTypeId === WEBSITE_COMMUNICATION_TYPE_ID) {
+      setQuickCommunicationTypeId("promotion");
+    }
+    setState((current) => ({ ...current, mode }));
+    setActivePanelId(mode === "blog" ? "look-and-feel" : mode === "ad-manual" ? "brand-logo" : "business-info");
+  }
+
+  async function handleGenerateHeroLines() {
+    if (!state.blogSectionText?.trim()) {
+      setHeroLineError("Paste a blog section first.");
+      return;
+    }
+    setHeroLineLoading(true);
+    setHeroLineError(null);
+    try {
+      const res = await fetch("/api/generate-hero-lines", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          blogSectionText: state.blogSectionText,
+          audienceContext: state.blogAudienceContext ?? "",
+          tone: state.tone,
+          imagePurpose: state.blogImagePurpose ?? "In-section blog visual",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error ?? "Hero line generation failed.");
+      }
+      const options = Array.isArray(data.heroLines)
+        ? data.heroLines.map((line: unknown) => String(line).trim()).filter(Boolean).slice(0, 5)
+        : [];
+      if (options.length === 0) {
+        throw new Error("No hero lines came back. Try again or type one manually.");
+      }
+      setHeroLineOptions(options);
+      if (!state.blogHeroLine?.trim()) {
+        update("blogHeroLine", options[0]);
+      }
+    } catch (err) {
+      setHeroLineError(err instanceof Error ? err.message : "Hero line generation failed.");
+    } finally {
+      setHeroLineLoading(false);
+    }
+  }
+
+  async function handleRefineSceneDirection() {
+    const rawText = state.blogSceneDirection?.trim();
+    if (!rawText) {
+      setSceneRefineError("Enter a scene direction first.");
+      return;
+    }
+    setSceneRefineLoading(true);
+    setSceneRefineError(null);
+    try {
+      const res = await fetch("/api/refine-instruction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rawText }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error ?? "Scene refinement failed.");
+      }
+      if (data.refined) {
+        update("blogSceneDirection", String(data.refined).trim());
+      }
+    } catch (err) {
+      setSceneRefineError(err instanceof Error ? err.message : "Scene refinement failed.");
+    } finally {
+      setSceneRefineLoading(false);
+    }
+  }
+
+  async function handleSuggestSceneIdeas() {
+    if (!state.blogSectionText?.trim()) {
+      setSceneIdeasError("Paste a blog section first.");
+      return;
+    }
+    setSceneIdeasLoading(true);
+    setSceneIdeasError(null);
+    try {
+      const res = await fetch("/api/suggest-blog-scene-ideas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          blogSectionText: state.blogSectionText,
+          heroLine: state.blogHeroLine ?? "",
+          audienceContext: state.blogAudienceContext ?? "",
+          tone: state.tone,
+          imagePurpose: state.blogImagePurpose ?? "In-section blog visual",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error ?? "Scene idea generation failed.");
+      }
+      const ideas = Array.isArray(data.ideas)
+        ? data.ideas.map((idea: Partial<BlogSceneIdea>) => ({
+            type: String(idea.type ?? "").trim(),
+            title: String(idea.title ?? "").trim(),
+            heroLine: String(idea.heroLine ?? "").trim(),
+            sceneDirection: String(idea.sceneDirection ?? "").trim(),
+            avoid: String(idea.avoid ?? "").trim(),
+          })).filter((idea: BlogSceneIdea) => idea.type && idea.title && idea.heroLine && idea.sceneDirection).slice(0, 3)
+        : [];
+      if (ideas.length === 0) {
+        throw new Error("No scene ideas came back. Try again or write one manually.");
+      }
+      setSceneIdeas(ideas);
+    } catch (err) {
+      setSceneIdeasError(err instanceof Error ? err.message : "Scene idea generation failed.");
+    } finally {
+      setSceneIdeasLoading(false);
+    }
+  }
+
+  function applySceneIdea(idea: BlogSceneIdea) {
+    update("blogHeroLine", idea.heroLine);
+    update("blogSceneDirection", `${idea.sceneDirection}\n\nAvoid: ${idea.avoid}`);
+    setSceneRefineError(null);
+  }
+
+  async function handleBlogImageUpload(file: File | undefined) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setBlogImageError("Upload a PNG, JPG, WebP, or other image file.");
+      return;
+    }
+    setBlogImageBusy(true);
+    setBlogImageError(null);
+    const sourceUrl = URL.createObjectURL(file);
+    try {
+      const img = await loadImageFromUrl(sourceUrl);
+      const scale = Math.min(
+        1,
+        BLOG_IMAGE_MAX_WIDTH / img.naturalWidth,
+        BLOG_IMAGE_MAX_HEIGHT / img.naturalHeight,
+      );
+      const outputWidth = Math.max(1, Math.round(img.naturalWidth * scale));
+      const outputHeight = Math.max(1, Math.round(img.naturalHeight * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = outputWidth;
+      canvas.height = outputHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Could not prepare this image for export.");
+      ctx.drawImage(img, 0, 0, outputWidth, outputHeight);
+      const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob(resolve, "image/webp", 0.86);
+      });
+      if (!blob) throw new Error("Could not convert this image to WebP.");
+      setBlogOptimizedImage({
+        originalName: file.name,
+        originalSize: file.size,
+        originalWidth: img.naturalWidth,
+        originalHeight: img.naturalHeight,
+        outputUrl: URL.createObjectURL(blob),
+        outputSize: blob.size,
+        outputWidth,
+        outputHeight,
+        filename: buildBlogImageFilename(state),
+        altText: buildBlogImageAltText(state),
+      });
+    } catch (err) {
+      setBlogImageError(err instanceof Error ? err.message : "Image optimization failed.");
+    } finally {
+      URL.revokeObjectURL(sourceUrl);
+      setBlogImageBusy(false);
+    }
+  }
+
+  function refreshBlogImageSeoText() {
+    setBlogOptimizedImage((current) => current
+      ? {
+          ...current,
+          filename: buildBlogImageFilename(state),
+          altText: buildBlogImageAltText(state),
+        }
+      : current
+    );
+  }
+
+  function downloadBlogOptimizedImage() {
+    if (!blogOptimizedImage) return;
+    const a = document.createElement("a");
+    a.href = blogOptimizedImage.outputUrl;
+    a.download = blogOptimizedImage.filename.endsWith(".webp")
+      ? blogOptimizedImage.filename
+      : `${slugifyFilenamePart(blogOptimizedImage.filename) || "blog-image"}.webp`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  async function copyBlogAltText() {
+    if (!blogOptimizedImage?.altText.trim()) return;
+    await navigator.clipboard.writeText(blogOptimizedImage.altText);
+    setAltCopied(true);
+    window.setTimeout(() => setAltCopied(false), 1600);
+  }
+
   function fillDevTestBusinessInfo() {
     resetKnowledgeBase();
     setBuildKbPulsing(true);
@@ -1309,6 +1668,20 @@ function App() {
   }
 
   function buildCurrentPrompt(requireSelectedBenefit = false, variantSeed = generationNonce) {
+    if (isBlogMode) {
+      return buildBlogPrompt(
+        state,
+        {
+          hasUserLogo: false,
+          autoAccentHex,
+          autoSecondaryHex,
+          logoWidth: userLogo?.width,
+          logoHeight: userLogo?.height,
+        },
+        variantSeed,
+      );
+    }
+
     if (requireSelectedBenefit && !activeOffer) {
       setGenerateError("Select one offer and at least 1 benefit before generating.");
       setPanel2DoneError("Select one offer and at least 1 benefit before generating.");
@@ -1329,23 +1702,37 @@ function App() {
         benefits: activeBenefits,
       },
       undefined,
-      { hasUserLogo: !!userLogo, autoAccentHex, logoWidth: userLogo?.width, logoHeight: userLogo?.height },
+      { hasUserLogo: !!userLogo, autoAccentHex, autoSecondaryHex, logoWidth: userLogo?.width, logoHeight: userLogo?.height },
       variantSeed,
     );
   }
 
   function validatePromptRequirements(action: "generating" | "copying") {
-    if (!state.websiteUrl?.trim() || !state.companyName?.trim() || !state.locationArea?.trim() || !state.businessType?.trim()) {
-      setGenerateError("Complete all Business Information fields, then click Build KB before generating.");
-      setPanel1DoneError("Complete all fields, then click Build KB.");
-      setActivePanelId("business-info");
-      return false;
+    if (isBlogMode) {
+      if (!state.blogSectionText?.trim()) {
+        setGenerateError(`Paste a blog section before ${action}.`);
+        return false;
+      }
+      if (state.blogIncludeText !== false && !state.blogHeroLine?.trim()) {
+        setGenerateError(`Add a hero line before ${action}, or turn off image text.`);
+        return false;
+      }
+      return true;
     }
-    if (!hasBuiltKnowledgeBase) {
-      setGenerateError("Build KB first before generating.");
-      setPanel1DoneError("Build KB first before continuing.");
-      setActivePanelId("business-info");
-      return false;
+
+    if (usingWebsiteOffer) {
+      if (!state.websiteUrl?.trim() || !state.companyName?.trim() || !state.locationArea?.trim() || !state.businessType?.trim()) {
+        setGenerateError("Complete all Business Information fields, then click Build KB before generating.");
+        setPanel1DoneError("Complete all fields, then click Build KB.");
+        setActivePanelId("business-info");
+        return false;
+      }
+      if (!hasBuiltKnowledgeBase) {
+        setGenerateError("Build KB first before generating.");
+        setPanel1DoneError("Build KB first before continuing.");
+        setActivePanelId("business-info");
+        return false;
+      }
     }
     if (!activeOffer) {
       setGenerateError(`Select one offer and at least 1 benefit before ${action}.`);
@@ -1411,6 +1798,7 @@ function App() {
 
   // ── Derived animation flags ──────────────────────────────
   const benefitsNeedAttention =
+    !isBlogMode &&
     activePanelId === "offer-benefits" &&
     usingWebsiteOffer &&
     !!kbSelectedOffer &&
@@ -1418,31 +1806,63 @@ function App() {
     (kbBenefitsByOffer[kbSelectedOffer]?.length ?? 0) > 0;
 
   const doneButtonShouldPulse =
+    !isBlogMode &&
     activePanelId === "offer-benefits" &&
     !!activeOffer &&
     activeBenefitCount >= 1;
 
   const canGeneratePrompt =
-    !!state.websiteUrl?.trim() &&
-    !!state.companyName?.trim() &&
-    !!state.locationArea?.trim() &&
-    !!state.businessType?.trim() &&
-    hasBuiltKnowledgeBase &&
-    !!activeOffer &&
-    activeBenefitCount >= 1 &&
-    !!userLogo &&
-    !!logoMode;
+    isBlogMode
+      ? !!state.blogSectionText?.trim() &&
+        (state.blogIncludeText === false || !!state.blogHeroLine?.trim())
+      : (isManualAdMode ||
+        (!!state.websiteUrl?.trim() &&
+          !!state.companyName?.trim() &&
+          !!state.locationArea?.trim() &&
+          !!state.businessType?.trim() &&
+          hasBuiltKnowledgeBase)) &&
+        !!activeOffer &&
+        activeBenefitCount >= 1 &&
+        !!userLogo &&
+        !!logoMode;
 
-  const allLeftDone = LEFT_PANELS.every(id => donePanels.has(id));
+  const allLeftDone = currentLeftPanels.every(id => donePanels.has(id));
   const regenReady = doneButtonShouldPulse && allLeftDone;
   // LOCAL TEST HELPER ONLY.
   // Keep this wired for local QA, but never expose it on Vercel/public deployments.
   const showLocalOnlyFillTestBusinessButton = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost";
 
-  const nextIncompleteLeftPanel = LEFT_PANELS.find(id => !donePanels.has(id));
+  const nextIncompleteLeftPanel = currentLeftPanels.find(id => !donePanels.has(id));
   const nextPanelTitle = nextIncompleteLeftPanel
     ? PANEL_ORDER.find(p => p.id === nextIncompleteLeftPanel)?.title
     : null;
+
+  function renderPromptActions(extraClassName = "") {
+    return (
+      <>
+        <div className={`action-row${extraClassName ? ` ${extraClassName}` : ""}`}>
+          <button
+            className={`copy-prompt-mega ${copied ? "copied clicked-feedback" : ""}`}
+            onClick={copyPrompt}
+            type="button"
+            aria-disabled={!canGeneratePrompt}
+          >
+            {copied ? "✓ Prompt Copied" : `📋 Copy ${isBlogMode ? "Blog Prompt" : "Prompt"}`}
+          </button>
+          <button
+            className={`copy-prompt-mega regenerate${regenDone ? " regen-done" : ""}${regenReady ? " regen-ready" : ""}`}
+            onClick={handleGenerate}
+            type="button"
+            disabled={isGenerating}
+            aria-disabled={!canGeneratePrompt}
+          >
+            {isGenerating ? <span className="btn-spinner" /> : regenDone ? "✓ Generated" : `↺ Generate ${isBlogMode ? "Blog Prompt" : "Prompt"}`}
+          </button>
+        </div>
+        {generateError && <p className="generate-requirements-note generate-requirements-warning">{generateError}</p>}
+      </>
+    );
+  }
 
   return (
     <main className="app-shell" data-theme={themeMode}>
@@ -1464,6 +1884,34 @@ function App() {
             </button>
           </div>
 
+          <div className="mode-switch-card" aria-label="Prompt mode">
+            <span className="compact-label">Prompt Mode</span>
+            <div className="mode-switch-row">
+              <button
+                type="button"
+                className={state.mode === "ad" ? "active" : ""}
+                onClick={() => updateMode("ad")}
+              >
+                Ad Prompt
+              </button>
+              <button
+                type="button"
+                className={state.mode === "ad-manual" ? "active" : ""}
+                onClick={() => updateMode("ad-manual")}
+              >
+                By-Pass Business Info
+              </button>
+              <button
+                type="button"
+                className={state.mode === "blog" ? "active" : ""}
+                onClick={() => updateMode("blog")}
+              >
+                Blog Image
+              </button>
+            </div>
+          </div>
+
+          {state.mode === "ad" && (
           <div className="spotlight-panel-wrap">
           <WorkflowPanel
             id="business-info"
@@ -1558,9 +2006,12 @@ function App() {
             {kbError && <p className="kb-error">{kbError}</p>}
           </WorkflowPanel>
           </div>
+          )}
 
+          {!isBlogMode && (
           <WorkflowPanel
             id="brand-logo"
+            stepOverride={isManualAdMode ? 1 : undefined}
             activePanelId={activePanelId}
             onActivate={() => openPanel("brand-logo")}
             onDone={() => {
@@ -1609,7 +2060,7 @@ function App() {
               <>
                 <p className="logo-contrast-prompt">
                   {logoMode
-                    ? `${logoMode === "dark" ? "Dark" : "Light"} Mode selected — using your logo's accent colour${autoAccentHex !== "#20c8ff" ? ` (${autoAccentHex})` : ""}. You can override in the palette picker.`
+                    ? `${logoMode === "dark" ? "Dark" : "Light"} Mode selected — using your logo colours${autoAccentHex !== "#20c8ff" ? `: primary ${autoAccentHex}` : ""}${autoSecondaryHex ? `, secondary ${autoSecondaryHex}` : ""}. You can override in the palette picker.`
                     : "Choose how your ad will be rendered:"}
                 </p>
                 <div className="logo-contrast-row">
@@ -1672,12 +2123,15 @@ function App() {
               onChange={(id) => update("paletteId", id)}
               userLogo={userLogo}
               autoAccentHex={autoAccentHex}
+              autoSecondaryHex={autoSecondaryHex}
               modeFilter={logoMode}
             />
           </WorkflowPanel>
+          )}
 
           <WorkflowPanel
             id="look-and-feel"
+            stepOverride={isBlogMode ? 1 : isManualAdMode ? 2 : undefined}
             activePanelId={activePanelId}
             onActivate={() => openPanel("look-and-feel")}
             onDone={() => { markDone("look-and-feel"); advancePanel("look-and-feel"); }}
@@ -1716,15 +2170,19 @@ function App() {
 
           <WorkflowPanel
             id="ad-settings"
+            stepOverride={isBlogMode ? 2 : isManualAdMode ? 3 : undefined}
+            titleOverride={isBlogMode ? "Image Settings" : undefined}
             activePanelId={activePanelId}
             onActivate={() => openPanel("ad-settings")}
-            onDone={() => { markDone("ad-settings"); advancePanel("ad-settings"); }}
+            onDone={() => { markDone("ad-settings"); if (isBlogMode) setActivePanelId(""); else advancePanel("ad-settings"); }}
             setPanelRef={(el) => { panelRefs.current["ad-settings"] = el; }}
             hasIncomingAttention={incomingAttentionPanelId === "ad-settings"}
             isDone={donePanels.has("ad-settings")}
             summary={
               (() => {
-                const parts = [state.tone, selectedFormat.name, state.cta].filter(Boolean);
+                const parts = isBlogMode
+                  ? [state.tone, selectedFormat.name, state.blogIncludeText === false ? "No image text" : "Hero text on image"].filter(Boolean)
+                  : [state.tone, selectedFormat.name, state.cta].filter(Boolean);
                 return parts.length
                   ? <span className="wf-summary-text">{parts.join(" · ")}</span>
                   : <span className="wf-summary-empty">Not configured</span>;
@@ -1765,6 +2223,8 @@ function App() {
               </div>
             </div>
 
+            {!isBlogMode && (
+            <>
             <label className="field cta-field">
               <span>CTA</span>
               {editingCta ? (
@@ -1814,6 +2274,8 @@ function App() {
                 <option>Both</option>
               </Field>
             )}
+            </>
+            )}
             </div>
           </WorkflowPanel>
 
@@ -1830,12 +2292,14 @@ function App() {
             ))}
           </div>
 
+          {!isBlogMode && (
           <WorkflowPanel
             id="special-instructions"
+            stepOverride={isManualAdMode ? 4 : undefined}
             activePanelId={activePanelId}
             onActivate={() => openPanel("special-instructions")}
             onDone={() => {
-              if (kbOffers.length === 0) {
+              if (!isManualAdMode && kbOffers.length === 0) {
                 setBuildKbUrgent(true);
                 openPanel("business-info");
                 return;
@@ -1880,10 +2344,254 @@ function App() {
               </button>
             )}
           </WorkflowPanel>
+          )}
 
         </aside>
 
         <div className="right-column">
+          {isBlogMode ? (
+          <section className="kb-panel blog-mode-panel">
+            <header className="kb-panel-header">
+              <div className="kb-panel-header-top">
+                <span className="kb-step-badge">3</span>
+                <h3>Blog Image</h3>
+              </div>
+              <p>Paste one blog section and describe the image you want. This skips offers, benefits, chips, and CTA layout.</p>
+            </header>
+
+            <div className="blog-form-grid">
+              <label className="blog-field">
+                <span className="kb-subcard-label">BLOG SECTION TEXT</span>
+                <textarea
+                  className="blog-textarea"
+                  value={state.blogSectionText ?? ""}
+                  onChange={(e) => {
+                    update("blogSectionText", e.target.value);
+                    setHeroLineOptions([]);
+                    setHeroLineError(null);
+                    setSceneIdeas([]);
+                    setSceneIdeasError(null);
+                  }}
+                  placeholder="Paste the paragraph or section this image should support."
+                  rows={7}
+                />
+              </label>
+
+              <label className="blog-field">
+                <span className="blog-field-head">
+                  <span className="kb-subcard-label">HERO LINE</span>
+                  <button
+                    type="button"
+                    className="hero-generate-button"
+                    onClick={handleGenerateHeroLines}
+                    disabled={heroLineLoading || !state.blogSectionText?.trim()}
+                  >
+                    {heroLineLoading ? "Generating..." : "Generate Hero Lines"}
+                  </button>
+                </span>
+                <input
+                  type="text"
+                  value={state.blogHeroLine ?? ""}
+                  onChange={(e) => update("blogHeroLine", e.target.value)}
+                  placeholder="e.g. Your Website Should Work After Hours"
+                />
+                <p className="blog-field-note">If you change this after uploading an image, click Refresh SEO Text so the filename and alt text match.</p>
+                {heroLineError && <p className="hero-line-error">{heroLineError}</p>}
+                {heroLineOptions.length > 0 && (
+                  <div className="hero-line-options" aria-label="Hero line options">
+                    {heroLineOptions.map((line) => (
+                      <button
+                        key={line}
+                        type="button"
+                        className={state.blogHeroLine === line ? "active" : ""}
+                        onClick={() => update("blogHeroLine", line)}
+                      >
+                        {line}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </label>
+
+              <label className="blog-field">
+                <span className="kb-subcard-label">BUSINESS / AUDIENCE CONTEXT</span>
+                <input
+                  type="text"
+                  value={state.blogAudienceContext ?? ""}
+                  onChange={(e) => {
+                    update("blogAudienceContext", e.target.value);
+                    setHeroLineOptions([]);
+                    setHeroLineError(null);
+                  }}
+                  placeholder="e.g. HVAC owners, roofers, dance schools, local service businesses"
+                />
+              </label>
+
+              <label className="blog-field">
+                <span className="kb-subcard-label">IMAGE PURPOSE</span>
+                <select
+                  value={state.blogImagePurpose ?? "In-section blog visual"}
+                  onChange={(e) => update("blogImagePurpose", e.target.value)}
+                >
+                  <option>In-section blog visual</option>
+                  <option>Blog hero image</option>
+                  <option>Social preview image</option>
+                </select>
+              </label>
+
+              <div className="kb-subcard scene-ideas-card">
+                <div className="kb-subcard-head">
+                  <span className="kb-subcard-label">SCENE IDEAS</span>
+                  <button
+                    type="button"
+                    className="hero-generate-button"
+                    onClick={handleSuggestSceneIdeas}
+                    disabled={sceneIdeasLoading || !state.blogSectionText?.trim()}
+                  >
+                    {sceneIdeasLoading ? "Thinking..." : "Suggest Scene Ideas"}
+                  </button>
+                </div>
+                <p className="kb-subcard-desc">
+                  Use this when you pasted a blog section but do not know what the image should show.
+                </p>
+                {sceneIdeasError && <p className="hero-line-error">{sceneIdeasError}</p>}
+                {sceneIdeas.length > 0 && (
+                  <div className="scene-idea-list">
+                    {sceneIdeas.map((idea) => (
+                      <article className="scene-idea-card" key={`${idea.type}-${idea.title}`}>
+                        <div className="scene-idea-type">{idea.type}</div>
+                        <h4>{idea.title}</h4>
+                        <p><strong>Hero:</strong> {idea.heroLine}</p>
+                        <p>{idea.sceneDirection}</p>
+                        <p className="scene-idea-avoid"><strong>Avoid:</strong> {idea.avoid}</p>
+                        <button type="button" className="saved-combo-button" onClick={() => applySceneIdea(idea)}>
+                          Use This Idea
+                        </button>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <label className="blog-field">
+                <span className="blog-field-head">
+                  <span className="kb-subcard-label">SCENE DIRECTION</span>
+                  <button
+                    type="button"
+                    className="scene-refine-button"
+                    onClick={handleRefineSceneDirection}
+                    disabled={sceneRefineLoading || !state.blogSceneDirection?.trim()}
+                  >
+                    {sceneRefineLoading ? "Refining..." : "Refine Scene"}
+                  </button>
+                </span>
+                <textarea
+                  className="blog-textarea"
+                  value={state.blogSceneDirection ?? ""}
+                  onChange={(e) => {
+                    update("blogSceneDirection", e.target.value);
+                    setSceneRefineError(null);
+                  }}
+                  placeholder="e.g. Show a local business owner checking missed leads on a tablet in a clean workplace."
+                  rows={4}
+                />
+                {sceneRefineError && <p className="hero-line-error">{sceneRefineError}</p>}
+              </label>
+
+              {renderPromptActions("blog-prompt-action-row")}
+
+              <div className="blog-checkbox-row">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={state.blogIncludeText !== false}
+                    onChange={(e) => update("blogIncludeText", e.target.checked)}
+                  />
+                  <span>Show hero line on the image</span>
+                </label>
+              </div>
+
+              <div className="kb-subcard blog-optimizer-card">
+                <div className="kb-subcard-head">
+                  <span className="kb-subcard-label">BLOG IMAGE OPTIMIZER</span>
+                </div>
+                <p className="kb-subcard-desc">
+                  Upload the finished image. The app will rename it, resize it if needed, convert it to WebP, and suggest alt text to paste into LandingSite.
+                </p>
+                <input
+                  id="blog-finished-image-file"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif,image/bmp,image/avif"
+                  className="blog-image-file-input"
+                  onChange={(e) => {
+                    handleBlogImageUpload(e.target.files?.[0]);
+                    e.target.value = "";
+                  }}
+                />
+                <label htmlFor="blog-finished-image-file" className="blog-image-upload-button">
+                  {blogImageBusy ? "Optimizing..." : "Upload Finished Image"}
+                </label>
+                {blogImageError && <p className="hero-line-error">{blogImageError}</p>}
+
+                {blogOptimizedImage && (
+                  <div className="blog-optimized-result">
+                    <div className="blog-image-meta-grid">
+                      <div>
+                        <span>Original</span>
+                        <strong>{blogOptimizedImage.originalWidth} x {blogOptimizedImage.originalHeight}</strong>
+                        <small>{formatBytes(blogOptimizedImage.originalSize)}</small>
+                      </div>
+                      <div>
+                        <span>Optimized</span>
+                        <strong>{blogOptimizedImage.outputWidth} x {blogOptimizedImage.outputHeight}</strong>
+                        <small>{formatBytes(blogOptimizedImage.outputSize)}</small>
+                      </div>
+                    </div>
+
+                    <label className="blog-field">
+                      <span className="kb-subcard-label">OPTIMIZED IMAGE FILE NAME</span>
+                      <input
+                        type="text"
+                        value={blogOptimizedImage.filename}
+                        onChange={(e) => setBlogOptimizedImage((current) => current ? { ...current, filename: e.target.value } : current)}
+                      />
+                      <p className="blog-field-note">This is the renamed file the app will download for LandingSite.</p>
+                    </label>
+
+                    <label className="blog-field">
+                      <span className="blog-field-head">
+                        <span className="kb-subcard-label">ALT TEXT FOR LANDINGSITE</span>
+                        <button
+                          type="button"
+                          className="alt-copy-button"
+                          onClick={copyBlogAltText}
+                          disabled={!blogOptimizedImage.altText.trim()}
+                        >
+                          {altCopied ? "Copied" : "Copy Text"}
+                        </button>
+                      </span>
+                      <textarea
+                        className="blog-textarea blog-alt-textarea"
+                        value={blogOptimizedImage.altText}
+                        onChange={(e) => setBlogOptimizedImage((current) => current ? { ...current, altText: e.target.value } : current)}
+                        rows={3}
+                      />
+                    </label>
+
+                    <div className="blog-optimizer-actions">
+                      <button type="button" className="saved-combo-button" onClick={refreshBlogImageSeoText}>
+                        Refresh SEO Text From Current Hero Line
+                      </button>
+                      <button type="button" className="blog-download-button" onClick={downloadBlogOptimizedImage}>
+                        Download Optimized Image
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+          ) : (
           <section className={`kb-panel${activePanelId === "offer-benefits" ? " kb-step-active" : ""}${panel2IncomingAttention ? " panel2-incoming-attention" : ""}`}>
             <header className="kb-panel-header">
               <div className="kb-panel-header-top">
@@ -1910,7 +2618,9 @@ function App() {
                 <select
                   value={quickCommunicationTypeId}
                   onChange={(e) => {
-                    const nextTypeId = e.target.value;
+                    const nextTypeId = isManualAdMode && e.target.value === WEBSITE_COMMUNICATION_TYPE_ID
+                      ? "promotion"
+                      : e.target.value;
                     const nextSavedComboId = nextTypeId.startsWith(SAVED_COMBO_ID_PREFIX)
                       ? nextTypeId.slice(SAVED_COMBO_ID_PREFIX.length)
                       : null;
@@ -1930,10 +2640,11 @@ function App() {
                     setPanel2DoneError(null);
                     setGenerateError(null);
                   }}
-                  disabled={!hasBuiltKnowledgeBase}
                 >
                   <optgroup label="Built-In Presets">
-                    {quickCommunicationTypes.map((type) => (
+                    {quickCommunicationTypes
+                      .filter((type) => !isManualAdMode || type.id !== WEBSITE_COMMUNICATION_TYPE_ID)
+                      .map((type) => (
                       <option key={type.id} value={type.id}>{type.label}</option>
                     ))}
                   </optgroup>
@@ -1949,16 +2660,16 @@ function App() {
                 </select>
               </label>
               <p className="kb-subcard-desc">
-                {hasBuiltKnowledgeBase
-                  ? "Choose a preset to swap only the offer and benefit chip words."
-                  : "Build the KB first, then choose an optional preset."}
+                {usingWebsiteOffer
+                  ? "Use the website flow, or choose a preset to skip Build KB for the offer and benefit chips."
+                  : "This preset replaces only the offer and benefit chip words. Business details can still be added on the left."}
               </p>
               <div className="saved-combo-actions">
                 <button
                   type="button"
                   className="saved-combo-button"
                   onClick={handleSaveCurrentCombo}
-                  disabled={!hasBuiltKnowledgeBase || !activeOffer || activeBenefitCount < 1}
+                  disabled={!activeOffer || activeBenefitCount < 1}
                 >
                   Save Current Combo
                 </button>
@@ -2004,9 +2715,9 @@ function App() {
               {(showSubOffers
                 ? [...kbOffers, ...kbSubOffers.filter((s) => !kbOffers.includes(s))]
                 : kbOffers
-              ).length === 0 ? (
+              ).length === 0 && !(activeManualOffer && !usingWebsiteOffer) ? (
                 <p className="kb-subcard-cue">
-                  Enter business details on the left and click Build KB.
+                  Use website offer needs Build KB. Choose a preset above to work without website business info.
                 </p>
               ) : (
                 <div className="kb-chips">
@@ -2234,27 +2945,9 @@ function App() {
               </button>
             )}
           </section>
+          )}
 
-        <div className="action-row">
-          <button
-            className={`copy-prompt-mega ${copied ? "copied clicked-feedback" : ""}`}
-            onClick={copyPrompt}
-            type="button"
-            aria-disabled={!canGeneratePrompt}
-          >
-            {copied ? "✓ Prompt Copied" : "📋 Copy Prompt"}
-          </button>
-          <button
-            className={`copy-prompt-mega regenerate${regenDone ? " regen-done" : ""}${regenReady ? " regen-ready" : ""}`}
-            onClick={handleGenerate}
-            type="button"
-            disabled={isGenerating}
-            aria-disabled={!canGeneratePrompt}
-          >
-            {isGenerating ? <span className="btn-spinner" /> : regenDone ? "✓ Generated" : "↺ Generate Prompt"}
-          </button>
-        </div>
-        {generateError && <p className="generate-requirements-note generate-requirements-warning">{generateError}</p>}
+        {!isBlogMode && renderPromptActions()}
 
         <div className="output-accordion">
           <button

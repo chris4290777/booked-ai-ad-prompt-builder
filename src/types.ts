@@ -13,6 +13,7 @@ export type Product = {
 };
 
 export type BuilderState = {
+  mode: "ad" | "ad-manual" | "blog";
   productId: string;
   industry: string;
   tone: string;
@@ -30,6 +31,13 @@ export type BuilderState = {
   animatedCharacterStyle?: string;
   specialInstructions?: string;
   refinedInstructions?: string;
+  blogImagePurpose?: string;
+  blogSectionText?: string;
+  blogAudienceContext?: string;
+  blogHeroLine?: string;
+  blogSceneDirection?: string;
+  blogIncludeText?: boolean;
+  blogIncludeLogo?: boolean;
 };
 
 export type PlatformFormat = {

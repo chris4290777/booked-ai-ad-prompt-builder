@@ -786,6 +786,42 @@ const refineSchema = {
   required: ["refined"],
 };
 
+const heroLinesSchema = {
+  type: "object",
+  properties: {
+    heroLines: {
+      type: "array",
+      items: { type: "string" },
+      minItems: 3,
+      maxItems: 5,
+    },
+  },
+  required: ["heroLines"],
+};
+
+const blogSceneIdeasSchema = {
+  type: "object",
+  properties: {
+    ideas: {
+      type: "array",
+      minItems: 3,
+      maxItems: 3,
+      items: {
+        type: "object",
+        properties: {
+          type: { type: "string" },
+          title: { type: "string" },
+          heroLine: { type: "string" },
+          sceneDirection: { type: "string" },
+          avoid: { type: "string" },
+        },
+        required: ["type", "title", "heroLine", "sceneDirection", "avoid"],
+      },
+    },
+  },
+  required: ["ideas"],
+};
+
 app.post("/api/refine-instruction", async (req, res) => {
   const { rawText } = req.body ?? {};
   if (!rawText?.trim()) return res.status(400).json({ error: "rawText is required" });
@@ -833,6 +869,156 @@ app.post("/api/refine-instruction", async (req, res) => {
       return res.status(429).json({ error: "Rate limit exceeded — try again in a moment." });
     }
     return res.status(500).json({ error: "Refinement failed — your raw text will be used." });
+  }
+});
+
+app.post("/api/generate-hero-lines", async (req, res) => {
+  const { blogSectionText, audienceContext, tone, imagePurpose } = req.body ?? {};
+  if (!blogSectionText?.trim()) {
+    return res.status(400).json({ error: "blogSectionText is required" });
+  }
+
+  const system = [
+    "You write short hero lines for AI-generated blog images.",
+    "The line should summarize the main idea of one blog section, not sell an offer.",
+    "Rules:",
+    "- Return 5 options.",
+    "- 3 to 8 words each.",
+    "- Clear, concrete, and useful for a blog image.",
+    "- No clickbait, no pricing, no CTA language, no exclamation marks.",
+    "- Do not mention AI unless the section is clearly about AI.",
+    "- Title Case. No trailing punctuation.",
+    "- Plain JSON only.",
+  ].join("\n");
+
+  const contents = [
+    system,
+    "",
+    `Tone: ${tone || "Professional"}`,
+    `Image purpose: ${imagePurpose || "In-section blog visual"}`,
+    `Audience/business context: ${audienceContext || "general local business audience"}`,
+    "",
+    `Blog section text:\n${String(blogSectionText).trim().slice(0, 4000)}`,
+  ].join("\n");
+
+  try {
+    const response = await generateWithFallback({
+      contents,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: heroLinesSchema,
+        temperature: 0.45,
+      },
+    });
+
+    let heroLines = [];
+    try {
+      const parsed = JSON.parse(response.text ?? "{}");
+      heroLines = Array.isArray(parsed.heroLines) ? parsed.heroLines : [];
+    } catch { /* fall through to empty */ }
+
+    heroLines = heroLines
+      .map((line) => String(line).replace(/\s+/g, " ").trim().replace(/[.!?]+$/g, ""))
+      .filter((line) => line.length >= 3 && line.length <= 80)
+      .slice(0, 5);
+
+    if (heroLines.length === 0) {
+      return res.status(500).json({ error: "Could not generate hero lines." });
+    }
+
+    return res.json({ heroLines });
+  } catch (err) {
+    console.error("generate-hero-lines error:", err?.message);
+    const status = err?.status ?? err?.error?.status;
+    if (status === "RESOURCE_EXHAUSTED" || err?.code === 429) {
+      return res.status(429).json({ error: "Rate limit exceeded — try again in a moment." });
+    }
+    return res.status(500).json({ error: "Hero line generation failed. You can still type one manually." });
+  }
+});
+
+app.post("/api/suggest-blog-scene-ideas", async (req, res) => {
+  const { blogSectionText, heroLine, audienceContext, tone, imagePurpose } = req.body ?? {};
+  if (!blogSectionText?.trim()) {
+    return res.status(400).json({ error: "blogSectionText is required" });
+  }
+
+  const system = [
+    "You create image-ready visual scene concepts for AI-generated blog images.",
+    "Return exactly 3 different ideas:",
+    "1. Simple Editorial Photo",
+    "2. Instructional Explainer",
+    "3. Comparison Or Process Visual",
+    "Rules:",
+    "- Blog images support the article. They are not ads.",
+    "- The sceneDirection must be ready to paste directly into an image generator.",
+    "- Make sceneDirection 4 to 7 sentences, concrete, visual, and specific.",
+    "- Include the main subject, setting, composition, action, lighting, and any minimal on-image text rules.",
+    "- The Simple Editorial Photo idea should feel realistic, clean, and mostly text-free.",
+    "- The Instructional Explainer idea may use one large, easy-to-render teaching element such as a checklist, level, simple form, or two short labels.",
+    "- The Comparison Or Process Visual idea should use before/after, correct/incorrect, or a simple process only when the blog section naturally benefits from it, and it must stay visually simple.",
+    "- Prefer one clear visual idea over many tiny elements.",
+    "- Avoid fragile details image models commonly distort: thin strings, wires, measuring tapes, small hardware, tiny tools, complex hand-tool interactions, detailed cutaways, transparent overlays, and precision diagrams.",
+    "- For trade, construction, repair, medical, beauty, automotive, or installation topics, use broad visible cues instead of delicate mechanics. Show the result or simple inspection moment rather than exact technical operations.",
+    "- For instructional scenes, prefer large, physically clear objects and simple human actions. Nothing should intersect, merge into, pass through, float inside, or pierce solid objects.",
+    "- If alignment, spacing, timing, flow, or sequence matters, show it through composition, perspective, simple labels, or a clean checklist rather than fragile lines, wires, arrows, or dense diagrams.",
+    "- Avoid turning blog lists into many floating icons or random UI tiles.",
+    "- Avoid logos, CTAs, price claims, product badges, sales-ad layouts, dense infographics, dashboards, and tiny text.",
+    "- If text appears in the image, keep it to one hero line or at most two short labels.",
+    "- Make avoid a practical negative instruction the image model can follow.",
+    "- No markdown. Plain JSON only.",
+  ].join("\n");
+
+  const contents = [
+    system,
+    "",
+    `Tone: ${tone || "Professional"}`,
+    `Image purpose: ${imagePurpose || "In-section blog visual"}`,
+    `Existing hero line, if any: ${heroLine || ""}`,
+    `Audience/business context: ${audienceContext || "general local business audience"}`,
+    "",
+    `Blog section text:\n${String(blogSectionText).trim().slice(0, 5000)}`,
+  ].join("\n");
+
+  try {
+    const response = await generateWithFallback({
+      contents,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: blogSceneIdeasSchema,
+        temperature: 0.55,
+      },
+    });
+
+    let ideas = [];
+    try {
+      const parsed = JSON.parse(response.text ?? "{}");
+      ideas = Array.isArray(parsed.ideas) ? parsed.ideas : [];
+    } catch { /* fall through to empty */ }
+
+    ideas = ideas
+      .map((idea) => ({
+        type: String(idea.type ?? "").replace(/\s+/g, " ").trim().slice(0, 60),
+        title: String(idea.title ?? "").replace(/\s+/g, " ").trim().slice(0, 80),
+        heroLine: String(idea.heroLine ?? "").replace(/\s+/g, " ").trim().replace(/[.!?]+$/g, "").slice(0, 80),
+        sceneDirection: String(idea.sceneDirection ?? "").replace(/\s+/g, " ").trim().slice(0, 1800),
+        avoid: String(idea.avoid ?? "").replace(/\s+/g, " ").trim().slice(0, 500),
+      }))
+      .filter((idea) => idea.type && idea.title && idea.heroLine && idea.sceneDirection)
+      .slice(0, 3);
+
+    if (ideas.length === 0) {
+      return res.status(500).json({ error: "Could not suggest scene ideas." });
+    }
+
+    return res.json({ ideas });
+  } catch (err) {
+    console.error("suggest-blog-scene-ideas error:", err?.message);
+    const status = err?.status ?? err?.error?.status;
+    if (status === "RESOURCE_EXHAUSTED" || err?.code === 429) {
+      return res.status(429).json({ error: "Rate limit exceeded — try again in a moment." });
+    }
+    return res.status(500).json({ error: "Scene idea generation failed. You can still write a scene manually." });
   }
 });
 
